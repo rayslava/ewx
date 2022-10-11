@@ -1,0 +1,80 @@
+* Experimentar -> Demo?
+
+? Suitable base:
+
+ref/
+  wlroots
+  cage
+  mahogany
+  river
+
+tinywl & cage use wlr_scene
+mahogany is split into a c backend and a cl frontend
+river has a seperate program that specifies layout
+  but both don't use the newer wlr_scene api for damage-tracking
+
+https://www.hjdskes.nl/projects/cage/
+  Cage is based on the annotated source of tinywl and rootston.
+
+-> tinywl
+
+** tinywl
+[[http://inclem.net/2021/04/17/wayland/writing_a_wayland_compositor_with_wlroots/][Writing a wayland compositor with wlroots]]
+  Fork tinywl. This tiny example is shipped with wlroots and is an
+  excellent base for a serious compositor. Although short it implements
+  in a basic way almost every core functionality you’ll need, and
+  implicitly teaches a lot about Wayland API interaction (especially if
+  using the C interface to events, listeners etc.) which scales very
+  well when branching out into other protocols. Since tinywl is within
+  the wlroots tree it is also guaranteed to be up to date.
+
+
+tinywl main walktrought:
+main does setup
+
+[[file:ref/wlroots/tinywl/tinywl.c::/* Create a scene graph. This is a wlroots abstraction that handles all][tinywl.c]]:
+  Create a scene graph. This is a wlroots abstraction that handles all
+  rendering and damage tracking. *All the compositor author needs to do*
+  *is add things that should be rendered to the scene graph at the proper*
+  *positions and then call wlr_scene_output_commit() to render a frame if*
+  *necessary.*
+  
+Afterwards main sets
+  setenv("WAYLAND_DISPLAY", socket, true);
+forks and runs the startup_cmd in the child
+
+[[file:ref/wlroots/tinywl/tinywl.c::/* Run the Wayland event loop. This does not return until you exit the][In the parent the event loop is started]]
+  Run the Wayland event loop. This *does not return until you exit the*
+  *compositor*. Starting the backend rigged up all of the necessary event
+  loop configuration to listen to libinput events, DRM events, generate
+  frame events at the refresh rate, and so on. */
+
+
+Notable omissions from TinyWL:
+- HiDPI support
+- Any kind of configuration, e.g. output layout
+- Any protocol other than xdg-shell (e.g. layer-shell, for
+  panels/taskbars/etc; or Xwayland, for proxied X11 windows)
+- Optional protocols, e.g. screen capture, primary selection, virtual
+  keyboard, etc. Most of these are plug-and-play with wlroots, but they're
+  omitted for brevity.
+
+** wlr_scene
+[[file:ref/wlroots/include/wlr/types/wlr_scene.h::The scene-graph API provides a declarative way to display surfaces. The][wlr_scene]]:
+  The scene-graph API provides a declarative way to display surfaces. The
+  compositor creates a scene, adds surfaces, then renders the scene on
+  outputs.
+ 
+  The scene-graph API only supports basic 2D composition operations (like the
+  KMS API or the Wayland protocol does). For anything more complicated,
+  compositors need to implement custom rendering logic.
+
+Set the position of the node relative to its parent.
+  wlr_scene_node_set_position
+
+** [ ] Build +tinywl+ ewl
+
+guix shell wlroots wayland-protocols gcc-toolchain make pkg-config -- make CC=gcc
+
+guix shell --manifest=manifest.scm -- make CC=gcc
+guix shell --manifest=../../../manifest.scm -- make CC=gcc
