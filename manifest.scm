@@ -10,11 +10,11 @@
              (gnu packages base)
              (gnu packages commencement))
 
-;; Dependency libdrm found: NO found 2.4.107 but need: '>=2.4.109'
+;; Dependency libdrm found: NO found 2.4.109 but need: '>=2.4.113'
 (define libdrm
   (package
     (inherit libdrm)
-    (version "2.4.109")
+    (version "2.4.113")
     (source (origin
               (method url-fetch)
               (uri (string-append
@@ -22,13 +22,13 @@
                     version ".tar.xz"))
               (sha256
                (base32
-                "09kzrdsd14zr0i3izvi5mck4vqccl3c9hr84r9i4is0zikh554v2"))))))
+                "1qg54drng3mxm64dsxgg0l6li4yrfzi50bgj0r3fnfzncwlypmvz"))))))
 
-;; Dependency wayland-protocols found: NO found 1.23 but need: '>=1.24'
+;; Dependency wayland-protocols found: NO found 1.24 but need: '>=1.26'
 (define wayland-protocols
   (package
     (inherit wayland-protocols)
-    (version "1.24")
+    (version "1.26")
     (source (origin
               (method url-fetch)
               (uri (string-append
@@ -36,27 +36,42 @@
                     "wayland-protocols-" version ".tar.xz"))
               (sha256
                (base32
-                "1hlb6gvyqlmsdkv5179ccj07p04cn6xacjkgklakbszczv7xiw5z"))))))
+                "04vgllmpmrv14x3x64ns01vgwx4hriljayjkz9idgbv83i63hly5"))))))
 
-(define wlroots-15
+;; Dependency wayland-server found: NO found 1.20.0 but need: '>=1.21'
+(define wayland
   (package
-    (inherit wlroots)
-    (name "wlroots")
-    (version "0.15.0")
-    (source
-     (origin
-       (method git-fetch)
-       (uri (git-reference
-             (url "https://gitlab.freedesktop.org/wlroots/wlroots.git")
-             (commit version)))
-       (file-name (git-file-name name version))
-       (sha256
-        (base32 "0wdzs0wpv61pxgy3mx3xjsndyfmbj30v47d3w9ymmnd4r479n41n"))))
-    (propagated-inputs (modify-inputs (package-propagated-inputs wlroots)
-                         (append libdrm)
-                         (replace "wayland-protocols" wayland-protocols)))))
+    (inherit wayland)
+    (version "1.21.0")
+    (source (origin
+              (method url-fetch)
+              (uri "https://gitlab.freedesktop.org/wayland/wayland/-/releases/1.21.0/downloads/wayland-1.21.0.tar.xz")
+              (sha256
+               (base32
+                "1b0ixya9bfw5c9jx8mzlr7yqnlyvd3jv5z8wln9scdv8q5zlvikd"))))))
 
-(packages->manifest (list wlroots-15
+(define wlroots-next
+  (let ((commit "11192e69308ff48c0f3ec40fb572c4e8e4ad13d8")
+        (revision "0"))
+    (package
+      (inherit wlroots)
+      (name "wlroots")
+      (version (git-version "0.15.0" revision commit))
+      (source
+       (origin
+         (method git-fetch)
+         (uri (git-reference
+               (url "https://gitlab.freedesktop.org/wlroots/wlroots.git")
+               (commit commit)))
+         (file-name (git-file-name name version))
+         (sha256
+          (base32 "11kwiqksl9fq6lq2zrygva2igcdn000l8s3a57dwnn57wwggzdk5"))))
+      (propagated-inputs (modify-inputs (package-propagated-inputs wlroots)
+                           (append libdrm)
+                           (replace "wayland-protocols" wayland-protocols)
+                           (replace "wayland" wayland))))))
+
+(packages->manifest (list wlroots-next
                           wayland-protocols
                           gnu-make
                           pkg-config
