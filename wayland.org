@@ -117,6 +117,49 @@ other: fullscreen
 
 open questions: how to handle embedded -> later!
 
+*** Drive from emacs
+Emacs is the "server" (actually a client talking to the server, X style).
+Emacs is the server side decoration.
+
+An idea in design space:
+  C server is minimal.
+  + Do more in elisp
+  - Slower and single threaded
+
+  eg. if it wants to create window it has to ask emacs first 
+      emacs than positions the window and ews draws it.
+
+  -> A client wants a new toplevel window
+  -> Emacs creats it's decorations frame & waits for the event & positions both inside parent (window/frame/monitor)
+
+  Emacs does moving of windows; eg move by dragging modeline
+
+  *Unification*
+  # This approad seems simpler with less duplication between C & Lisp.
+
+*** LOG
+start
+  New toplevel XDG surface app_id=emacs title=emacs@muh
+emacs new frame
+  New toplevel XDG surface app_id=emacs title=emacs@muh
+eshell mpv
+  New toplevel XDG surface app_id=mpv title=10_Blues_Shuffle_EASY_.mp4
+
+---
+
+start
+  00:00:00.425 [ews.c:765] New toplevel XDG surface app_id=emacs title=emacs@muh pid=15343
+new frame
+  00:02:23.492 [ews.c:765] New toplevel XDG surface app_id=emacs title=emacs@muh pid=15343
+mpv
+  00:03:54.271 [ews.c:765] New toplevel XDG surface app_id=mpv title=10_Blues_Shuffle_EASY_.mp4 - mpv pid=15392
+second emacs
+  00:07:23.856 [ews.c:765] New toplevel XDG surface app_id=emacs title=emacs@muh pid=15456
+new frame in second emacs
+  00:07:42.647 [ews.c:765] New toplevel XDG surface app_id=emacs title=emacs@muh pid=15456
+
+Wayland only?
+
 ** Layers
 [2022-10-14 Fri]
 3 layers
@@ -126,6 +169,14 @@ open questions: how to handle embedded -> later!
 
 floating: only position from elisp for now?
   usecase floating webcam for talk
+
+** Keyboard
+[2022-10-14 Fri]
+
+Normally give all keys to focused window. 
+But also some way to say from emacs: Give these keys to emacs.
+And simulated keys over protocol.
+Maybe keytranslation | interception tools style?
 
 * Webcam & mpv
 [2022-10-14 Fri]
