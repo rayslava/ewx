@@ -884,7 +884,7 @@ int main(int argc, char *argv[]) {
          *
          * https://drewdevault.com/2018/07/29/Wayland-shells.html
          */
-        wl_list_init(&server.views);
+        wl_list_init(&server.views); /* XXXX: only needed for cycling */
         server.xdg_shell = wlr_xdg_shell_create(server.wl_display, 3);
         server.new_xdg_surface.notify = server_new_xdg_surface;
         wl_signal_add(&server.xdg_shell->events.new_surface,
