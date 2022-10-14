@@ -976,14 +976,14 @@ int main(int argc, char *argv[]) {
                 return 1;
         }
 
-        /* Set the WAYLAND_DISPLAY environment variable to our socket and run the
-         * startup command if requested. */
+        /* Set the WAYLAND_DISPLAY environment variable to our socket */
         setenv("WAYLAND_DISPLAY", socket, true);
-        if (startup_cmd) {
-                if (fork() == 0) {
-                        execl("/bin/sh", "/bin/sh", "-c", startup_cmd, (void *)NULL);
-                }
+        
+        pid_t pid = fork();
+        if (pid == 0) {
+          execl("/gnu/store/aaga7qf0y93rfxrkwmqwh9z1fpcdn7ii-emacs-next-pgtk-29.0.50-1.0a5477b/bin/emacs", (void *)NULL);
         }
+        
         /* Run the Wayland event loop. This does not return until you exit the
          * compositor. Starting the backend rigged up all of the necessary event
          * loop configuration to listen to libinput events, DRM events, generate
