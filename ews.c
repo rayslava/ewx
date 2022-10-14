@@ -68,6 +68,8 @@ struct tinywl_server {
         struct wlr_output_layout *output_layout;
         struct wl_list outputs;
         struct wl_listener new_output;
+  
+  pid_t emacs_pid;
 };
 
 struct tinywl_output {
@@ -983,13 +985,14 @@ int main(int argc, char *argv[]) {
         if (pid == 0) {
           execl("/gnu/store/aaga7qf0y93rfxrkwmqwh9z1fpcdn7ii-emacs-next-pgtk-29.0.50-1.0a5477b/bin/emacs", (void *)NULL);
         }
+        server.emacs_pid = pid;
         
         /* Run the Wayland event loop. This does not return until you exit the
          * compositor. Starting the backend rigged up all of the necessary event
          * loop configuration to listen to libinput events, DRM events, generate
          * frame events at the refresh rate, and so on. */
-        wlr_log(WLR_INFO, "Running Wayland compositor on WAYLAND_DISPLAY=%s",
-                        socket);
+        wlr_log(WLR_INFO, "Running Wayland compositor on WAYLAND_DISPLAY=%s with Emacs pid=%d",
+                socket, pid);
         wl_display_run(server.wl_display);
 
         /* Once wl_display_run returns, we shut down the server. */
