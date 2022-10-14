@@ -757,6 +757,12 @@ static void server_new_xdg_surface(struct wl_listener *listener, void *data) {
     struct wlr_scene_tree *parent_tree = parent->data;
     xdg_surface->data = wlr_scene_xdg_surface_create(
                                                      parent_tree, xdg_surface);
+    
+    pid_t pid;
+    wl_client_get_credentials(parent->client->client, &pid, NULL, NULL);
+    wlr_log(WLR_DEBUG, "New popup XDG surface app_id=%s title=%s pid=%d",
+            parent->toplevel->app_id, parent->toplevel->title, pid);
+    
     return;
   }
   assert(xdg_surface->role == WLR_XDG_SURFACE_ROLE_TOPLEVEL);
