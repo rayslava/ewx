@@ -1,3 +1,7 @@
+This is intended to be a hack for emacs conf 22.
+Have fun ;)
+Don't overengineer; wait for feedback first.
+
 * Experimentar -> Demo?
 
 ? Suitable base:
@@ -72,9 +76,57 @@ Notable omissions from TinyWL:
 Set the position of the node relative to its parent.
   wlr_scene_node_set_position
 
-** [ ] Build +tinywl+ ewl
+** [X] Build tinywl (->  ewl?)
+CLOSED: [2022-10-11 Tue 22:38]
 
 guix shell wlroots wayland-protocols gcc-toolchain make pkg-config -- make CC=gcc
 
 guix shell --manifest=manifest.scm -- make CC=gcc
 guix shell --manifest=../../../manifest.scm -- make CC=gcc
+
+** [ ] 1st protoype
+[2022-10-14 Fri]
+Scope: *Just windows for now! No input handling in emacs.*
+
+4 components:
+
+1. A wayland compositor (wayland-server) that wraps emacs and talks to : *Server*   in C
+2. a wayland-client as dynamic module that responds to the compositor. : *Client*   in C
+3. A wayland protocol for this communication.                          : *Protocol* in XML
+4. A elisp library that does the window management.                    : *Lib*      in ELisp 
+
+Flow:
+/A new window/shell(surface) is created./
+#     emacs / wayland
+- Server reacts to events.new_surface -> Creates datastructures but does not show the window
+- instead it sends event to client. The event contains info about the new window (title, ...)
+- Client translates window info to elisp
+- Emacs lib manages the window. It records and positions the window
+- a show requests is send to server if window is visible
+- The server shows the window as requested
+
+?
+- How does emacs recieve event?
+
+
+Protocol:
+- Events :: new, destroy
+- Requests :: show (position), destroy
+
+other: fullscreen
+
+open questions: how to handle embedded -> later!
+
+** Layers
+[2022-10-14 Fri]
+3 layers
+1. emacs frame
+2. embedded windows (inside buffers)
+3. floating windows
+
+floating: only position from elisp for now?
+  usecase floating webcam for talk
+
+* Webcam & mpv
+[2022-10-14 Fri]
+mpv --profile=low-latency --untimed /dev/video0
