@@ -23,6 +23,8 @@
 #include <wlr/types/wlr_subcompositor.h>
 #include <wlr/types/wlr_xcursor_manager.h>
 #include <wlr/types/wlr_xdg_shell.h>
+#include <wlr/types/wlr_xdg_decoration_v1.h>
+#include <wlr/types/wlr_server_decoration.h>
 #include <wlr/util/log.h>
 #include <xkbcommon/xkbcommon.h>
 
@@ -887,6 +889,21 @@ int main(int argc, char *argv[]) {
         server.new_xdg_surface.notify = server_new_xdg_surface;
         wl_signal_add(&server.xdg_shell->events.new_surface,
                         &server.new_xdg_surface);
+
+        /*
+         * Create xdg_decoration_manager. This makes most applications
+         * draw no decorations. This results in no decorations at all
+         * because we don't add server side decorations.
+         */
+         wlr_xdg_decoration_manager_v1_create(server.wl_display);
+        /*
+         * Make it work with GTK too. GTK still uses the (now
+         * deprecated) server-decoration protocol, which is the
+         * predecessor to xdg-decoration.
+         */
+         wlr_server_decoration_manager_set_default_mode(
+             wlr_server_decoration_manager_create(server.wl_display),
+             WLR_SERVER_DECORATION_MANAGER_MODE_SERVER);
 
         /*
          * Creates a cursor, which is a wlroots utility for tracking the cursor
