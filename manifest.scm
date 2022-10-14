@@ -8,7 +8,9 @@
              (gnu packages freedesktop)
              (gnu packages pkg-config)
              (gnu packages base)
-             (gnu packages commencement))
+             (gnu packages commencement)
+             ;; x11 support in wlroots
+             (gnu packages xorg))
 
 ;; Dependency libdrm found: NO found 2.4.109 but need: '>=2.4.113'
 (define libdrm
@@ -69,7 +71,9 @@
       (propagated-inputs (modify-inputs (package-propagated-inputs wlroots)
                            (append libdrm)
                            (replace "wayland-protocols" wayland-protocols)
-                           (replace "wayland" wayland))))))
+                           (replace "wayland" wayland)
+                           ;; enable x11 support
+                           (append xcb-util-renderutil))))))
 
 (packages->manifest (list wlroots-next
                           wayland-protocols
