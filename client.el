@@ -26,9 +26,9 @@
                                (new_id u32r))
                              ;; struct
                              '((id . 1)
-                               (opcode . 0)
+                               (opcode . 1) ; get_registry
                                (length . 12)
-                               (new_id . 3))))
+                               (new_id . 2))))
 
 (bindat-unpack
  '((id u32r)
@@ -36,29 +36,44 @@
    (length u16r))
  (with-current-buffer "aa"
    (string-to-unibyte (buffer-substring-no-properties 1 9))))
-;; => ((length . 12) (opcode . 0) (id . 2))
+;; => ((length . 28) (opcode . 0) (id . 2))
 
 (bindat-unpack
  '((id u32r)
    (opcode u16r)
    (length u16r)
-   (callback_data u32r))
+   (name u32r)
+   (str-length u32r)
+   (interface strz (str-length))
+   (align 4)
+   (version u32r))
  (with-current-buffer "aa"
-   (string-to-unibyte (buffer-substring-no-properties 1 13))))
-;; => ((callback_data . 1100) (length . 12) (opcode . 0) (id . 2))
-
-(with-current-buffer "aa"
-  (goto-char (point-min))
-  (end-of-line)
-  (length (string-to-unibyte (buffer-substring-no-properties 1 (1- (point))))))
-;; => 23
+   (string-to-unibyte (buffer-substring-no-properties 1 29))))
+;; =>
+;; ((version . 1)
+;;  (interface . "wl_shm")
+;;  (str-length . 7)
+;;  (name . 1)
+;;  (length . 28)
+;;  (opcode . 0)
+;;  (id . 2))
 
 (bindat-unpack
  '((id u32r)
    (opcode u16r)
    (length u16r)
-   (new_id u32r))
+   (name u32r)
+   (str-length u32r)
+   (interface strz (str-length))
+   (align 4)
+   (version u32r))
  (with-current-buffer "aa"
-   (string-to-unibyte (buffer-substring-no-properties 13 25))))
-;; => ((new_id . 2) (length . 12) (opcode . 1) (id . 1))
-
+   (string-to-unibyte (buffer-substring-no-properties 29 (+ 29 28)))))
+;; =>
+;; ((version . 2)
+;;  (interface . "wl_drm")
+;;  (str-length . 7)
+;;  (name . 2)
+;;  (length . 28)
+;;  (opcode . 0)
+;;  (id . 2))
