@@ -90,10 +90,11 @@ Scope: *Just windows for now! No input handling in emacs.*
 
 4 components:
 
-1. A wayland compositor (wayland-server) that wraps emacs and talks to : *Server*   in C
-2. a wayland-client as dynamic module that responds to the compositor. : *Client*   in C
-3. A wayland protocol for this communication.                          : *Protocol* in XML
-4. A elisp library that does the window management.                    : *Lib*      in ELisp 
+1. *ews* A wayland compositor (wayland-server) that wraps emacs and talks to : *Server*   in C
+2. *ewc* a wayland-client as dynamic module that responds to the compositor. : *Client*   in C
+3. *ewp* A wayland protocol for this communication.                          : *Protocol* in XML
+4. *ewm* A elisp library that does the window management.                    : *Lib*      in ELisp 
+#  ew for all?
 
 Flow:
 /A new window/shell(surface) is created./
@@ -136,6 +137,54 @@ An idea in design space:
 
   *Unification*
   # This approad seems simpler with less duplication between C & Lisp.
+
+*** Make emacs react to event:
+Use make-network-process over socket
+driven by extra process?
+       from within emacs? (possible?)
+       extra process?
+
+Process can activate filter function if pending output.
+And can be send input.
+From within emacs without extra code.
+
+/OR/ as event
+eg special event; but seems hardcoded in C
+
+but should be part of emacs event loop
+
+-> either event
+   or process (= run if waiting for event)
+
+Maybe use dynamic module with wayland protocol in filter function.
+  call wl_display_dispatch (https://wayland-book.com/wayland-display/event-loop.html)
+  on queue which is wl_list (a linked list of events; events are maybe defined by scanner?)
+
+*** Nested uses output_layout with several output=windows
+eg x11:
+[[file:ref/wlroots/include/wlr/backend/x11.h::Creates a new X11 backend. This backend will be created with no outputs;][wlr/backend/x11.h]]
+
+ * Creates a new X11 backend. This backend will be created with no outputs;
+ * you must use wlr_x11_output_create() to add them.
+ *
+ * The `x11_display` argument is the name of the X Display socket. Set
+ * to NULL for the default behaviour of XOpenDisplay().
+ */
+struct wlr_backend *wlr_x11_backend_create(struct wl_display *display,
+	const char *x11_display);
+
+/**
+ * Adds a new output to this backend. You may remove outputs by destroying them.
+ * Note that if called before initializing the backend, this will return NULL
+ * and your outputs will be created during initialization (and given to you via
+ * the new_output signal).
+ */
+struct wlr_output *wlr_x11_output_create(struct wlr_backend *backend);
+
+*** child frames are popup surfaces in wayland
+[[orgit-rev:~/s/emacs/::6c1f0dd709a77a2fade006b5957553fc5abd7631][~/s/emacs/ (magit-rev 6c1f0dd709)]]
+child frames on pgtk are gtk widgets inside the parent surface, rather
+than subsurfaces (in wayland terms),
 
 *** LOG
 start
