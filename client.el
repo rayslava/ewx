@@ -1,3 +1,4 @@
+;; -*- lexical-binding: t; -*-
 (setq wtproc
       (make-network-process
        :name "wayland-0"
