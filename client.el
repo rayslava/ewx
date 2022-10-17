@@ -159,7 +159,7 @@ Tree protocol-name->interface-name->events->((event-name . bindat-spec) ...)
 ;;     (height u32r)))))
 
 (defsubst ewc-node-name (node)
-  (intern (dom-attr node 'name)))
+  (intern (string-replace "_" "-" (dom-attr node 'name))))
 
 (defun ewc-protocol (node)
   ;; (protocol interface... ...)
