@@ -83,7 +83,7 @@
 (defvar ewc-header
   '((id u32r)
     (opcode u16r)
-    (length u16r)))
+    (len u16r)))
 
 ;; parse
 (bindat-unpack ewc-header str idx)
@@ -131,18 +131,28 @@ idx = (+ idx length) | finished if = (length str) ; make rest an error for now
   "
 Tree protocol-name->interface-name->events->((event-name . bindat-spec) ...)
                                   ->requests->((request-name . bindat-spec) ...)")
-(defvar ewc-callbacks|listeners nil
-  "Alist object name to list/vector of event callbacks")
+(defvar ewc-listeners nil
+  "Tree protocol-name->interface-name->event-name->listener
+A listener is an event callback.")
 
 (defun ewc-parse (str str-len idx)
-  ;; header
-  (pcase-let (((map id opcode len) (bindat-unpack ewc-header str idx)))
-    (bindat-unpack
-     (seq-elt (map-elt ewc-events
-                       (seq-elt ewc-objects id))
-              opcode)
-     str
-     (+ idx 8))  ; -> call callback
+  "Parse STRing with STR-LENength starting at IDX."
+  (pcase-let* (((map id opcode len) (bindat-unpack ewc-header str idx))
+               (`(,protocol . ,interface) (ewc-objects-id->path id))
+               (listener (or (cdr (bindat-get-field ewc-listeners protocol interface opcode))
+                             #'princ)))
+
+    ;; DEBUG
+    (message "rx: id=%s opcode=%s len=%s protocol=%s interface=%s"
+             id opcode len protocol interface)
+
+    (funcall
+     listener
+     (bindat-unpack
+      (cdr (bindat-get-field ewc-protocols protocol interface 'events opcode))
+      str
+      (+ idx 8)))
+    
     (let ((idx (+ idx len)))
       (unless (= str-len idx)
         (ewc-parse str str-len idx)))))
