@@ -209,6 +209,18 @@ Tree protocol-name->interface-name->events->((event-name . bindat-spec) ...)
     (insert str))
   (ewc-parse str (length str) 0))
 
+(defun ewc-request (protocol interface request arguments)
+  (let* ((body (bindat-pack
+                (bindat-get-field ewc-protocols protocol interface 'requests request)
+                arguments))
+         (head (bindat-pack ewc-header `((id . ,(ewc-objects-path->id protocol interface))
+                                         (opcode . ,(ewc-alist-key->index
+                                                     (bindat-get-field protocol interface 'requests)
+                                                     request))
+                                         (len . ,(+ 8 (length body)))))))
+    (process-send-string (ewc-objects-id->data 1) (concat head body))))
+
+;; wl-display
 (defun ewc-connect ()
   ;; | ewc-init
   (if (and ewc-objects
@@ -223,16 +235,18 @@ Tree protocol-name->interface-name->events->((event-name . bindat-spec) ...)
                       :filter #'ewc-filter))
     (message "Emacs wayland client connected")))
 
-(defun ewc-request (protocol interface request arguments)
-  (let* ((body (bindat-pack
-                (bindat-get-field ewc-protocols protocol interface 'requests request)
-                arguments))
-         (head (bindat-pack ewc-header `((id . ,(ewc-objects-path->id protocol interface))
-                                         (opcode . ,(ewc-alist-key->index
-                                                     (bindat-get-field protocol interface 'requests)
-                                                     request))
-                                         (len . ,(+ 8 (length body)))))))
-    (process-send-string (ewc-objects-id->data 1) (concat head body))))
+;; wl-registry
+(defun ewc-get-registry ()
+  (let ((new-id (ewc-objects-add 'wayland 'wl-registry nil)))
+    ;; Add global listener
+    (setf (ewc-objects-path->listener 'wayland 'wl-registry 'global)
+          (pcase-lambda ((map name interface version))
+            ;; Add interface to this registries data
+            (push `(,name (interface . ,interface) (version . ,version))
+                  (ewc-objects-id->data new-id))))
+    ;; Issue the request
+    (ewc-request 'wayland 'wl-display 'get-registry `((registry . ,new-id)))
+    new-id))
 
 ;;; ewc-protocols
 ;; (protocol-name
@@ -320,14 +334,41 @@ Tree protocol-name->interface-name->events->((event-name . bindat-spec) ...)
 (ewc-objects-id->path 2)
 ;; => nil
 
-;; = get-registry
-(ewc-objects-add 'wayland 'wl-registry nil) ;; => new-id
-;; add listener
-(setf (ewc-objects-path->listener 'wayland 'wl-registry 'global)
-      (pcase-lambda ((map name interface version))
-        (message "Listener: %s %s %s" name interface version)
-        ;; Check that version we know of? Or better when bind?
-        (push (list name interface version)
-              (ewc-objects-path->data 'wayland 'wl-registry))))
-;; & then request
-(ewc-request 'wayland 'wl-display 'get-registry '((registry . 2)))
+(ewc-get-registry)
+;; => 2
+
+(ewc-objects-id->data 2)
+;; =>
+;; ((11
+;;   (interface . "wl_output")
+;;   (version . 4))
+;;  (10
+;;   (interface . "wl_seat")
+;;   (version . 8))
+;;  (9
+;;   (interface . "org_kde_kwin_server_decoration_manager")
+;;   (version . 1))
+;;  (8
+;;   (interface . "zxdg_decoration_manager_v1")
+;;   (version . 1))
+;;  (7
+;;   (interface . "xdg_wm_base")
+;;   (version . 3))
+;;  (6
+;;   (interface . "wl_data_device_manager")
+;;   (version . 3))
+;;  (5
+;;   (interface . "wl_subcompositor")
+;;   (version . 1))
+;;  (4
+;;   (interface . "wl_compositor")
+;;   (version . 5))
+;;  (3
+;;   (interface . "zwp_linux_dmabuf_v1")
+;;   (version . 4))
+;;  (2
+;;   (interface . "wl_drm")
+;;   (version . 2))
+;;  (1
+;;   (interface . "wl_shm")
+;;   (version . 1)))
