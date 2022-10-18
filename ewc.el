@@ -157,8 +157,10 @@ A listener is an event callback.")
       (unless (= str-len idx)
         (ewc-parse str str-len idx)))))
 
-;; filter
-(lambda (proc str)
+(defun ewc-filter (proc str)
+  ;; DEBUG
+  (with-current-buffer (get-buffer-create "*wayland*")
+    (insert str))
   (ewc-parse str (length str) 0))
 
 ;; ewc-protocols
