@@ -80,6 +80,17 @@
 ;;  (id . 2))
 
 ;;; impl: ewc.el a wayland client in elisp:)
+
+;; helper
+;; Why is this not build in?
+(defun ewc-alist-key->index (alist key)
+  (let ((index 0))
+    (catch 'found
+      (while alist
+        (if (eq key (car (pop alist)))
+            (throw 'found index)
+          (cl-incf index))))))
+
 (defvar ewc-header
   '((id u32r)
     (opcode u16r)
@@ -191,21 +202,14 @@ A listener is an event callback.")
                       :filter #'ewc-filter))
     (message "Emacs wayland client connected")))
 
-(defun ewc-get-opcode (protocol interface request)
-  (let ((requests (bindat-get-field ewc-protocols protocol interface 'requests))
-        (opcode 0))
-    (catch 'found
-      (while requests
-        (if (eq request (car (pop requests)))
-            (throw 'found opcode)
-          (cl-incf opcode))))))
-
 (defun ewc-request (protocol interface request arguments)
   (let* ((body (bindat-pack
                 (bindat-get-field ewc-protocols protocol interface 'requests request)
                 arguments))
          (head (bindat-pack ewc-header `((id . ,(ewc-objects-path->id protocol interface))
-                                         (opcode . ,(ewc-get-opcode protocol interface request))
+                                         (opcode . ,(ewc-alist-key->index
+                                                     (bindat-get-field protocol interface 'requests)
+                                                     request))
                                          (len . ,(+ 8 (length body)))))))
     (process-send-string (ewc-objects-id->data 1) (concat head body))))
 
