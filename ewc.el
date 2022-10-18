@@ -110,6 +110,11 @@ idx = (+ idx length) | finished if = (length str) ; make rest an error for now
   ;; In both lists newer objects are first.
   (path nil :type list)                 ; ((protocol . interface) ...)
   (data nil :type list)                 ; (data ...)
+  ;; A listener is an event callback.
+  (listener nil :type list)             ; ([listener ...] ...)
+  ;;                                      a list of vectors with
+  ;;                                      length equal to the objects
+  ;;                                      event count
   (length 0 :type (integer 0 *)))
 
 ;; define-inline lets ewc-objects-id->data and ewc-objects-path->data be used as gv place forms.
@@ -135,6 +140,13 @@ idx = (+ idx length) | finished if = (length str) ; make rest an error for now
    (nth (ewc-objects--nth ,id)
         (ewc-objects-data ewc-objects))))
 
+(define-inline ewc-objects-id->listener (id opcode)
+  (inline-quote
+   (aref
+    (nth (ewc-objects--nth ,id)
+         (ewc-objects-listener ewc-objects))
+    ,opcode)))
+
 ;; The path interface always returns the newest object with this path
 ;; Return all instead? Eg. for wl_output?
 
@@ -147,28 +159,34 @@ idx = (+ idx length) | finished if = (length str) ; make rest an error for now
   (inline-quote
    (ewc-objects-id->data (ewc-objects-path->id ,protocol ,interface))))
 
+(define-inline ewc-objects-path->listener (protocol interface event)
+  (inline-letevals (protocol interface)
+    (inline-quote
+     (ewc-objects-id->listener (ewc-objects-path->id ,protocol ,interface)
+                               (ewc-alist-key->index (bindat-get-field ewc-protocols ,protocol ,interface 'events)
+                                                     ,event)))))
+
 (defun ewc-objects-add (protocol interface data)
   (push (cons protocol interface) (ewc-objects-path ewc-objects))
   (push data (ewc-objects-data ewc-objects))
+  (push (make-vector (length (bindat-get-field ewc-protocols protocol interface 'events))
+                     nil)
+        (ewc-objects-listener ewc-objects))
   (cl-incf (ewc-objects-length ewc-objects)))
 
-;; Next is seeded from protocol xml
-;; & next two are trees for readability
-;; & ewc-protocols as tree allows request and event lists
+;; ewc-protocols is seeded from protocol xml.
+;; It is a tree for readability and to have request and event lists.
 (defvar ewc-protocols nil
   "
 Tree protocol-name->interface-name->events->((event-name . bindat-spec) ...)
                                   ->requests->((request-name . bindat-spec) ...)")
-(defvar ewc-listeners nil
-  "Tree protocol-name->interface-name->event-name->listener
-A listener is an event callback.")
 
 (defun ewc-parse (str str-len idx)
   "Parse STRing with STR-LENength starting at IDX."
   (pcase-let* (((map id opcode len) (bindat-unpack ewc-header str idx))
                (`(,protocol . ,interface) (ewc-objects-id->path id))
-               (listener (or (cdr (bindat-get-field ewc-listeners protocol interface opcode))
-                             #'princ)))
+               (listener (or (ewc-objects-id->listener id opcode)
+                             #'princ))) ; DEBUG?
 
     ;; DEBUG
     (message "rx: id=%s opcode=%s len=%s protocol=%s interface=%s"
