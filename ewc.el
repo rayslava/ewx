@@ -321,6 +321,13 @@ Tree protocol-name->interface-name->events->((event-name . bindat-spec) ...)
 ;; => nil
 
 ;; = get-registry
-(ewc-objects-add 'wayland 'wl-registry nil)
-;; add listener & then request
+(ewc-objects-add 'wayland 'wl-registry nil) ;; => new-id
+;; add listener
+(setf (ewc-objects-path->listener 'wayland 'wl-registry 'global)
+      (pcase-lambda ((map name interface version))
+        (message "Listener: %s %s %s" name interface version)
+        ;; Check that version we know of? Or better when bind?
+        (push (list name interface version)
+              (ewc-objects-path->data 'wayland 'wl-registry))))
+;; & then request
 (ewc-request 'wayland 'wl-display 'get-registry '((registry . 2)))
