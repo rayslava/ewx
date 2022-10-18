@@ -12,7 +12,10 @@ xdg-shell-protocol.h:
 	$(WAYLAND_SCANNER) server-header \
 		$(WAYLAND_PROTOCOLS)/stable/xdg-shell/xdg-shell.xml $@
 
-ews: ews.c xdg-shell-protocol.h
+ewp-protocol.h:
+	$(WAYLAND_SCANNER) server-header ewp.xml $@
+
+ews: ews.c xdg-shell-protocol.h ewp-protocol.h
 	$(CC) $(CFLAGS) \
 		-g -Werror -I. \
 		-DWLR_USE_UNSTABLE \
@@ -20,7 +23,7 @@ ews: ews.c xdg-shell-protocol.h
 		$(LIBS)
 
 clean:
-	rm -f ews xdg-shell-protocol.h xdg-shell-protocol.c
+	rm -f ews xdg-shell-protocol.h xdg-shell-protocol.c ewp-protocol.h
 
 .DEFAULT_GOAL=ews
 .PHONY: clean
