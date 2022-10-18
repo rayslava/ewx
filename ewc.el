@@ -92,8 +92,40 @@
 idx = (+ idx length) | finished if = (length str) ; make rest an error for now
 
 (defvar ewc-objects nil
-  ;; "Alist object ID to object name in current session."
-  "List of objects (name) in current session.") ; Use nconc to add new?
+  "List of `ewc-objects' in current session.")
+
+(cl-defstruct (ewc-objects (:constructor ewc-objects-make)
+                           (:copier nil))
+  ;; In both lists newer objects are first.
+  (path nil :type list)                 ; ((protocol . interface) ...)
+  (data nil :type list)                 ; (data ...)
+  (length 0 :type (integer 0 *)))
+
+(defun ewc-objects--nth (id)
+  (let ((length (ewc-objects-length ewc-objects)))
+    (if (< length id)
+        (1+ length)
+        (- length id))))
+
+(defun ewc-objects-id->path (id)
+  (nth (ewc-objects--nth id)
+       (ewc-objects-path ewc-objects)))
+
+(defun ewc-objects-id->data (id)
+  (nth (ewc-objects--nth id)
+       (ewc-objects-data ewc-objects)))
+
+(defun ewc-objects-path->id (protocol interface)
+  (length (member (cons protocol interface) (ewc-objects-path ewc-objects))))
+
+(defun ewc-objects-path->data (protocol interface)
+  (ewc-objects-id->data (ewc-objects-path->id protocol interface)))
+
+(defun ewc-objects-add (protocol interface data)
+  (push (cons protocol interface) (ewc-objects-path ewc-objects))
+  (push data (ewc-objects-data ewc-objects))
+  (cl-incf (ewc-objects-length ewc-objects)))
+
 ;; Next is seeded from protocol xml
 (defvar ewc-protocols nil
   "
