@@ -127,6 +127,8 @@ idx = (+ idx length) | finished if = (length str) ; make rest an error for now
   (cl-incf (ewc-objects-length ewc-objects)))
 
 ;; Next is seeded from protocol xml
+;; & next two are trees for readability
+;; & ewc-protocols as tree allows request and event lists
 (defvar ewc-protocols nil
   "
 Tree protocol-name->interface-name->events->((event-name . bindat-spec) ...)
