@@ -1,87 +1,13 @@
-;; -*- lexical-binding: t; -*-
-(setq wtproc
-      (make-network-process
-       :name "wayland-0"
-       :remote "/run/user/1000/wayland-0"
-       :coding 'binary
-       :buffer "aa"))
+;;; ewc.el --- A wayland client in elisp:) -*- lexical-binding: t; -*-
 
-(bindat-pack
- ;; spec
- '((id u32r)
-   (length u16r)
-   (opcode u16r)
-   (data vec (eval (- (bindat-get-field struct 'length)
-                      8))))
- ;; struct
- '((id . 1)
-   (length . 12)
-   (opcode . 0)
-   (data . 2)))
+;;; Code:
+(require 'cl-macs)
+(require 'pcase)
+(require 'map)
 
-(process-send-string wtproc (bindat-pack
-                             ;; spec
-                             '((id u32r)
-                               (opcode u16r)
-                               (length u16r)
-                               (new_id u32r))
-                             ;; struct
-                             '((id . 1)
-                               (opcode . 1) ; get_registry
-                               (length . 12)
-                               (new_id . 2))))
+(require 'bindat)
 
-(bindat-unpack
- '((id u32r)
-   (opcode u16r)
-   (length u16r))
- (with-current-buffer "aa"
-   (string-to-unibyte (buffer-substring-no-properties 1 9))))
-;; => ((length . 28) (opcode . 0) (id . 2))
-
-(bindat-unpack
- '((id u32r)
-   (opcode u16r)
-   (length u16r)
-   (name u32r)
-   (str-length u32r)
-   (interface strz (str-length))
-   (align 4)
-   (version u32r))
- (with-current-buffer "aa"
-   (string-to-unibyte (buffer-substring-no-properties 1 29))))
-;; =>
-;; ((version . 1)
-;;  (interface . "wl_shm")
-;;  (str-length . 7)
-;;  (name . 1)
-;;  (length . 28)
-;;  (opcode . 0)
-;;  (id . 2))
-
-(bindat-unpack
- '((id u32r)
-   (opcode u16r)
-   (length u16r)
-   (name u32r)
-   (str-length u32r)
-   (interface strz (str-length))
-   (align 4)
-   (version u32r))
- (with-current-buffer "aa"
-   (string-to-unibyte (buffer-substring-no-properties 29 (+ 29 28)))))
-;; =>
-;; ((version . 2)
-;;  (interface . "wl_drm")
-;;  (str-length . 7)
-;;  (name . 2)
-;;  (length . 28)
-;;  (opcode . 0)
-;;  (id . 2))
-
-;;; impl: ewc.el a wayland client in elisp:)
-
-;; helper
+;;; Helper
 ;; Why is this not build in?
 (defun ewc-alist-key->index (alist key)
   (let ((index 0))
@@ -91,17 +17,72 @@
             (throw 'found index)
           (cl-incf index))))))
 
-(defvar ewc-header
-  '((id u32r)
-    (opcode u16r)
-    (len u16r)))
+;;; Protocol
+;; Read wayland xml protocols
+;; enums are not implemented
 
-;; parse
-(bindat-unpack ewc-header str idx)
--> id opcode length
-(bindat-unpack (lookup msg-spec id opcode) str 4)
-idx = (+ idx length) | finished if = (length str) ; make rest an error for now
+(defvar ewc-protocols nil
+  "
+Tree protocol-name->interface-name->events->((event-name . bindat-spec) ...)
+                                  ->requests->((request-name . bindat-spec) ...)")
+;; ewc-protocols is seeded from protocol xml.
+;; It is a tree for readability and to have request and event lists.
 
+;; (protocol-name
+;;  (interface-name
+;;   (events
+;;    (event-name . spec)
+;;    ...)
+;;   (requests
+;;    (request-name . spec)
+;;    ...))
+;;  ...)
+
+(defun ewc-protocol-read (xml-protocol-file)
+  ;; This is wayland-scanner
+  (pcase-let* ((node (with-current-buffer (find-file-noselect xml-protocol-file)
+                       (libxml-parse-xml-region (point-min) (point-max))))
+               (`(,protocol . ,interfaces) (ewc-protocol node)))
+    (setf (map-elt ewc-protocols protocol) interfaces)))
+
+(defsubst ewc-node-name (node)
+  (intern (string-replace "_" "-" (dom-attr node 'name))))
+
+(defun ewc-protocol (node)
+  ;; (protocol interface... ...)
+  (cons (ewc-node-name node)
+        (mapcar #'ewc-protocol-interface (dom-by-tag node 'interface))))
+
+(defun ewc-protocol-interface (node)
+  ;; (interface event... request... ...)
+  (list (ewc-node-name node)
+        (cons 'events
+              (mapcar #'ewc-protocol-msg (dom-by-tag node 'event)))
+        (cons 'requests
+              (mapcar #'ewc-protocol-msg (dom-by-tag node 'request)))))
+
+(defun ewc-protocol-msg (node)
+  ;; (event | request name arg ...)
+  (cons (ewc-node-name node)
+        (mapcan #'ewc-protocol-arg (dom-by-tag node 'arg))))
+
+(defun ewc-protocol-arg (node)
+  ;; (arg name type ...)
+  (let ((name (ewc-node-name node)))
+    (pcase (dom-attr node 'type)
+      ((or "uint" "object" "new_id")
+       `((,name u32r)))
+      ("string"
+       ;; Version without named str-len (using (eval last) or (-1) as
+       ;; len do not work.
+       `((str-len u32r)
+         (,name strz (str-len))
+         (align 4)))
+      ((or "int" "fixed" "array" "fd" "enum")
+       `((,name not-implemented))))))
+
+;;; Objects
+;; Manage the objects in the current session
 (defvar ewc-objects nil
   "List of `ewc-objects' in current session.")
 
@@ -174,15 +155,14 @@ idx = (+ idx length) | finished if = (length str) ; make rest an error for now
         (ewc-objects-listener ewc-objects))
   (cl-incf (ewc-objects-length ewc-objects)))
 
-;; ewc-protocols is seeded from protocol xml.
-;; It is a tree for readability and to have request and event lists.
-(defvar ewc-protocols nil
-  "
-Tree protocol-name->interface-name->events->((event-name . bindat-spec) ...)
-                                  ->requests->((request-name . bindat-spec) ...)")
+;;; Parse and print wayland wire messages
+(defvar ewc-header
+  '((id u32r)
+    (opcode u16r)
+    (len u16r)))
 
 (defun ewc-parse (str str-len idx)
-  "Parse STRing with STR-LENength starting at IDX."
+  "Parse wayland wire message STRing with STR-LENength starting at IDX."
   (pcase-let* (((map id opcode len) (bindat-unpack ewc-header str idx))
                (`(,protocol . ,interface) (ewc-objects-id->path id))
                (listener (or (ewc-objects-id->listener id opcode)
@@ -203,13 +183,8 @@ Tree protocol-name->interface-name->events->((event-name . bindat-spec) ...)
       (unless (= str-len idx)
         (ewc-parse str str-len idx)))))
 
-(defun ewc-filter (proc str)
-  ;; DEBUG
-  (with-current-buffer (get-buffer-create "*wayland*")
-    (insert str))
-  (ewc-parse str (length str) 0))
-
-(defun ewc-request (protocol interface request arguments)
+(defun ewc-print (protocol interface request arguments)
+  "Print wayland wire message for PROTOCOL INTERFACE REQUEST with ARGUMENTS."
   (let* ((body (bindat-pack
                 (bindat-get-field ewc-protocols protocol interface 'requests request)
                 arguments))
@@ -218,9 +193,15 @@ Tree protocol-name->interface-name->events->((event-name . bindat-spec) ...)
                                                      (bindat-get-field protocol interface 'requests)
                                                      request))
                                          (len . ,(+ 8 (length body)))))))
-    (process-send-string (ewc-objects-id->data 1) (concat head body))))
+    (concat head body)))
 
-;; wl-display
+;;; wl-display
+(defun ewc-filter (proc str)
+  ;; DEBUG
+  (with-current-buffer (get-buffer-create "*wayland*")
+    (insert str))
+  (ewc-parse str (length str) 0))
+
 (defun ewc-connect ()
   ;; | ewc-init
   (if (and ewc-objects
@@ -235,7 +216,12 @@ Tree protocol-name->interface-name->events->((event-name . bindat-spec) ...)
                       :filter #'ewc-filter))
     (message "Emacs wayland client connected")))
 
-;; wl-registry
+(defun ewc-request (protocol interface request arguments)
+  (process-send-string (ewc-objects-id->data 1) (ewc-print protocol interface request arguments)))
+
+;; TODO: Add cleanup fn
+
+;;; wl-registry
 (defun ewc-get-registry ()
   (let ((new-id (ewc-objects-add 'wayland 'wl-registry nil)))
     ;; Add global listener
@@ -248,61 +234,8 @@ Tree protocol-name->interface-name->events->((event-name . bindat-spec) ...)
     (ewc-request 'wayland 'wl-display 'get-registry `((registry . ,new-id)))
     new-id))
 
-;;; ewc-protocols
-;; (protocol-name
-;;  (interface-name
-;;   (events
-;;    (event-name . spec)
-;;    ...)
-;;   (requests
-;;    (request-name . spec)
-;;    ...))
-;;  ...)
-
-(defun ewc-protocol-read (xml-protocol-file)
-  ;; This is wayland-scanner
-  (pcase-let* ((node (with-current-buffer (find-file-noselect xml-protocol-file)
-                       (libxml-parse-xml-region (point-min) (point-max))))
-               (`(,protocol . ,interfaces) (ewc-protocol node)))
-    (setf (map-elt ewc-protocols protocol) interfaces)))
-
-(defsubst ewc-node-name (node)
-  (intern (string-replace "_" "-" (dom-attr node 'name))))
-
-(defun ewc-protocol (node)
-  ;; (protocol interface... ...)
-  (cons (ewc-node-name node)
-        (mapcar #'ewc-protocol-interface (dom-by-tag node 'interface))))
-
-(defun ewc-protocol-interface (node)
-  ;; (interface event... request... ...)
-  (list (ewc-node-name node)
-        (cons 'events
-              (mapcar #'ewc-protocol-msg (dom-by-tag node 'event)))
-        (cons 'requests
-              (mapcar #'ewc-protocol-msg (dom-by-tag node 'request)))))
-
-(defun ewc-protocol-msg (node)
-  ;; (event | request name arg ...)
-  (cons (ewc-node-name node)
-        (mapcan #'ewc-protocol-arg (dom-by-tag node 'arg))))
-
-(defun ewc-protocol-arg (node)
-  ;; (arg name type ...)
-  (let ((name (ewc-node-name node)))
-    (pcase (dom-attr node 'type)
-      ((or "uint" "object" "new_id")
-       `((,name u32r)))
-      ("string"
-       ;; Version without named str-len (using (eval last) or (-1) as
-       ;; len do not work.
-       `((str-len u32r)
-         (,name strz (str-len))
-         (align 4)))
-      ((or "int" "fixed" "array" "fd" "enum")
-       `((,name not-implemented))))))
-
 ;;; Test
+;; Experimentar
 (ewc-protocol-read "~/s/wayland/ref/wayland/protocol/wayland.xml")
 (ewc-protocol-read "~/s/wayland/ewp.xml")
 ;; =>
@@ -372,3 +305,6 @@ Tree protocol-name->interface-name->events->((event-name . bindat-spec) ...)
 ;;  (1
 ;;   (interface . "wl_shm")
 ;;   (version . 1)))
+
+(provide 'ewc)
+;;; ewc.el ends here
