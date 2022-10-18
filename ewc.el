@@ -241,6 +241,8 @@ A listener is an event callback.")
       ((or "uint" "object" "new_id")
        `((,name u32r)))
       ("string"
+       ;; Version without named str-len (using (eval last) or (-1) as
+       ;; len do not work.
        `((str-len u32r)
          (,name strz (str-len))
          (align 4)))
