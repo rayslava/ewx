@@ -101,25 +101,37 @@ idx = (+ idx length) | finished if = (length str) ; make rest an error for now
   (data nil :type list)                 ; (data ...)
   (length 0 :type (integer 0 *)))
 
-(defun ewc-objects--nth (id)
-  (let ((length (ewc-objects-length ewc-objects)))
-    (if (< length id)
-        (1+ length)
-        (- length id))))
+;; define-inline lets ewc-objects-id->data and ewc-objects-path->data be used as gv place forms.
+;; Setting path this way is explicitly forbidden and produces an error.
 
-(defun ewc-objects-id->path (id)
-  (nth (ewc-objects--nth id)
-       (ewc-objects-path ewc-objects)))
+(define-inline ewc-objects--nth (id)
+  (inline-letevals (id)
+    (inline-quote
+     (let ((length (ewc-objects-length ewc-objects)))
+       (if (< length ,id)
+           (1+ length)
+         (- length ,id))))))
 
-(defun ewc-objects-id->data (id)
-  (nth (ewc-objects--nth id)
-       (ewc-objects-data ewc-objects)))
+(define-inline ewc-objects-id->path (id)
+  (inline-quote
+   (nth (ewc-objects--nth ,id)
+        (ewc-objects-path ewc-objects))))
+(gv-define-expander ewc-objects-id->path
+  (lambda (_do _id) (error "Path is read-only")))
 
-(defun ewc-objects-path->id (protocol interface)
-  (length (member (cons protocol interface) (ewc-objects-path ewc-objects))))
+(define-inline ewc-objects-id->data (id)
+  (inline-quote
+   (nth (ewc-objects--nth ,id)
+        (ewc-objects-data ewc-objects))))
 
-(defun ewc-objects-path->data (protocol interface)
-  (ewc-objects-id->data (ewc-objects-path->id protocol interface)))
+(define-inline ewc-objects-path->id (protocol interface)
+  (inline-quote
+   (length (member (cons ,protocol ,interface)
+                   (ewc-objects-path ewc-objects)))))
+
+(define-inline ewc-objects-path->data (protocol interface)
+  (inline-quote
+   (ewc-objects-id->data (ewc-objects-path->id ,protocol ,interface))))
 
 (defun ewc-objects-add (protocol interface data)
   (push (cons protocol interface) (ewc-objects-path ewc-objects))
