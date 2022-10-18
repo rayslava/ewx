@@ -163,7 +163,6 @@ A listener is an event callback.")
     (insert str))
   (ewc-parse str (length str) 0))
 
-;; ewc-protocols
 (defun ewc-connect ()
   ;; | ewc-init
   (if (and ewc-objects
@@ -196,6 +195,7 @@ A listener is an event callback.")
                                          (len . ,(+ 8 (length body)))))))
     (process-send-string (ewc-objects-id->data 1) (concat head body))))
 
+;;; ewc-protocols
 ;; (protocol-name
 ;;  (interface-name
 ;;   (events
@@ -212,27 +212,6 @@ A listener is an event callback.")
                        (libxml-parse-xml-region (point-min) (point-max))))
                (`(,protocol . ,interfaces) (ewc-protocol node)))
     (setf (map-elt ewc-protocols protocol) interfaces)))
-
-(ewc-protocol-read "~/s/wayland/ref/wayland/protocol/wayland.xml")
-(ewc-protocol-read "~/s/wayland/ewp.xml")
-;; =>
-;; (emacs_wayland_protocol
-;;  (layout
-;;   (events
-;;    (layout-new-window
-;;     (current_output u32r)
-;;     (usable_width u32r)
-;;     (usable_height u32r)
-;;     (tags u32r)
-;;     (title u32r)
-;;     (application u32r)
-;;     (pid u32r)))
-;;   (requests
-;;    (layout-window
-;;     (x u32r)
-;;     (y u32r)
-;;     (width u32r)
-;;     (height u32r)))))
 
 (defsubst ewc-node-name (node)
   (intern (string-replace "_" "-" (dom-attr node 'name))))
