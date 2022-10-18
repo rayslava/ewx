@@ -135,6 +135,9 @@ idx = (+ idx length) | finished if = (length str) ; make rest an error for now
    (nth (ewc-objects--nth ,id)
         (ewc-objects-data ewc-objects))))
 
+;; The path interface always returns the newest object with this path
+;; Return all instead? Eg. for wl_output?
+
 (define-inline ewc-objects-path->id (protocol interface)
   (inline-quote
    (length (member (cons ,protocol ,interface)
