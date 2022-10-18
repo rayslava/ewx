@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<protocol name="emacs_wayland_protocol">
+  <copyright>
+    Copyright 2022 Michael Bauer
+
+    Permission to use, copy, modify, and/or distribute this software for any
+    purpose with or without fee is hereby granted, provided that the above
+    copyright notice and this permission notice appear in all copies.
+
+    THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+    WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+    MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+    ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+    WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+    ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+    OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+  </copyright>
+
+  <description summary="Let emacs manage wayland windows and input.">
+  </description>
+
+  <interface name="layout" version="1">
+    <description summary="Manage window layout">
+      An interface for a window manager client
+    </description>
+
+    <event name="layout_new_window">
+      <description summary="Layout new window">
+        The server requests a layout for a new window
+      </description>
+      <arg name="current_output" type="uint" summary="currently focused output"/>
+      <arg name="usable_width" type="uint" summary="width of the usable area"/>
+      <arg name="usable_height" type="uint" summary="height of the usable area"/>
+      <arg name="tags" type="uint" summary="tags of the output, 32-bit bitfield"/>
+      <arg name="title" type="string" summary="window-title"/>
+      <arg name="application" type="string" summary="application-name"/>
+      <arg name="pid" type="uint" summary="pid"/>
+    </event>
+    
+    <request name="layout_window">
+      <description summary="Layout window">
+        Position window on output
+        with matching serial.
+      </description>
+      <arg name="x" type="int" summary="x coordinate of window origin"/>
+      <arg name="y" type="int" summary="y coordinate of window origin"/>
+      <arg name="width" type="uint" summary="width of window"/>
+      <arg name="height" type="uint" summary="height of window"/>
+      <!-- window and output -->
+    </request>
+
+    <!-- A method to group (and commit) changes? -->
+
+  </interface>
+</protocol>
