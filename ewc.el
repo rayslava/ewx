@@ -248,3 +248,40 @@ A listener is an event callback.")
          (align 4)))
       ((or "int" "fixed" "array" "fd" "enum")
        `((,name not-implemented))))))
+
+;;; Test
+(ewc-protocol-read "~/s/wayland/ref/wayland/protocol/wayland.xml")
+(ewc-protocol-read "~/s/wayland/ewp.xml")
+;; =>
+;; (emacs_wayland_protocol
+;;  (layout
+;;   (events
+;;    (layout-new-window
+;;     (current_output u32r)
+;;     (usable_width u32r)
+;;     (usable_height u32r)
+;;     (tags u32r)
+;;     (title u32r)
+;;     (application u32r)
+;;     (pid u32r)))
+;;   (requests
+;;    (layout-window
+;;     (x u32r)
+;;     (y u32r)
+;;     (width u32r)
+;;     (height u32r)))))
+
+(ewc-connect)
+
+;; now ewc-objects-* can be tested
+(ewc-objects-id->path 0)
+;; => nil
+(ewc-objects-id->path 1)
+;; => (wayland . wl-display)
+(ewc-objects-id->path 2)
+;; => nil
+
+;; = get-registry
+(ewc-objects-add 'wayland 'wl-registry nil)
+;; add listener & then request
+(ewc-request 'wayland 'wl-display 'get-registry '((registry . 2)))
