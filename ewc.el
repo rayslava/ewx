@@ -164,6 +164,20 @@ A listener is an event callback.")
   (ewc-parse str (length str) 0))
 
 ;; ewc-protocols
+(defun ewc-connect ()
+  ;; | ewc-init
+  (if (and ewc-objects
+           (process-live-p (ewc-objects-id->data 1)))
+      (message "Emacs wayland client already connected")
+    (setq ewc-objects (ewc-objects-make))
+    (ewc-objects-add 'wayland 'wl-display
+                     (make-network-process
+                      :name "emacs-wayland-client"
+                      :remote "/run/user/1000/wayland-0" ; TODO: Make configurable/ detect.
+                      :coding 'binary
+                      :filter #'ewc-filter))
+    (message "Emacs wayland client connected")))
+
 ;; (protocol-name
 ;;  (interface-name
 ;;   (events
