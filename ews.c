@@ -908,7 +908,7 @@ int main(int argc, char *argv[]) {
    *
    * https://drewdevault.com/2018/07/29/Wayland-shells.html
    */
-  wl_list_init(&server.views); /* XXXX: only needed for cycling */
+  wl_list_init(&server.views); /* XXXX: List only needed for cycling */
   server.xdg_shell = wlr_xdg_shell_create(server.wl_display, 3);
   server.new_xdg_surface.notify = server_new_xdg_surface;
   wl_signal_add(&server.xdg_shell->events.new_surface,
@@ -926,8 +926,8 @@ int main(int argc, char *argv[]) {
    * predecessor to xdg-decoration.
    */
   wlr_server_decoration_manager_set_default_mode(
-                                                 wlr_server_decoration_manager_create(server.wl_display),
-                                                 WLR_SERVER_DECORATION_MANAGER_MODE_SERVER);
+    wlr_server_decoration_manager_create(server.wl_display),
+    WLR_SERVER_DECORATION_MANAGER_MODE_SERVER);
 
   /*
    * Creates a cursor, which is a wlroots utility for tracking the cursor
