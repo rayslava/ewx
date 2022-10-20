@@ -200,6 +200,10 @@ Tree protocol-name->interface-name->events->((event-name . bindat-spec) ...)
                                                      (bindat-get-field ewc-protocols protocol interface 'requests)
                                                      request))
                                          (len . ,(+ 8 (length body)))))))
+
+    ;; DEBUG
+    (message "Sending: msg=\"%s\"\"%s\"" head body)
+    
     (concat head body)))
 
 ;;; wl-display
