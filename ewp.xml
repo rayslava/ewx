@@ -42,8 +42,8 @@
         Position window on output
         with matching serial.
       </description>
-      <arg name="x" type="int" summary="x coordinate of window origin"/>
-      <arg name="y" type="int" summary="y coordinate of window origin"/>
+      <arg name="x" type="uint" summary="x coordinate of window origin"/>
+      <arg name="y" type="uint" summary="y coordinate of window origin"/>
       <arg name="width" type="uint" summary="width of window"/>
       <arg name="height" type="uint" summary="height of window"/>
       <!-- window and output -->
