@@ -283,9 +283,12 @@ Tree protocol-name->interface-name->events->((event-name . bindat-spec) ...)
 
 (ewc-objects-id->data 2)
 ;; =>
-;; ((11
+;; ((12
 ;;   (interface . "wl_output")
 ;;   (version . 4))
+;;  (11
+;;   (interface . "ewp_layout")
+;;   (version . 1))
 ;;  (10
 ;;   (interface . "wl_seat")
 ;;   (version . 8))
@@ -316,6 +319,24 @@ Tree protocol-name->interface-name->events->((event-name . bindat-spec) ...)
 ;;  (1
 ;;   (interface . "wl_shm")
 ;;   (version . 1)))
+
+;; Move to ewm.el?
+;; or this is ewc-XXX-bind = bind an object from the registry
+(ewc-objects-add 'emacs-wayland-protocol 'ewp-layout nil)
+;; => 3
+
+(ewc-connect)
+(ewc-get-registry)
+(ewc-request 'wayland 'wl-registry 'bind `((name . 11)
+                                           (str-len . ,(1+ (length "ewp_layout")))
+                                           (interface . "ewp_layout")
+                                           (version . 1)
+                                           (id . 3)))
+(ewc-request 'emacs-wayland-protocol 'ewp-layout 'layout-window '(()))
+
+
+
+(delete-process (ewc-objects-id->data 1))
 
 (provide 'ewc)
 ;;; ewc.el ends here
