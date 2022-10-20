@@ -19,7 +19,7 @@
   <description summary="Let emacs manage wayland windows and input.">
   </description>
 
-  <interface name="layout" version="1">
+  <interface name="ewp_layout" version="1">
     <description summary="Manage window layout">
       An interface for a window manager client
     </description>
