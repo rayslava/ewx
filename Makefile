@@ -12,14 +12,18 @@ xdg-shell-protocol.h:
 	$(WAYLAND_SCANNER) server-header \
 		$(WAYLAND_PROTOCOLS)/stable/xdg-shell/xdg-shell.xml $@
 
-ewp-protocol.h:
+ewp-protocol.h: ewp.xml
 	$(WAYLAND_SCANNER) server-header ewp.xml $@
 
-ews: ews.c xdg-shell-protocol.h ewp-protocol.h
+ewp-protocol.c: ewp.xml
+	$(WAYLAND_SCANNER) private-code ewp.xml $@
+
+# -o                     |
+ews: ews.c ewp-protocol.c ewp-protocol.h xdg-shell-protocol.h
 	$(CC) $(CFLAGS) \
 		-g -Werror -I. \
 		-DWLR_USE_UNSTABLE \
-		-o $@ $< \
+		-o $@ $< $(word 2,$^) \
 		$(LIBS)
 
 clean:
