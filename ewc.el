@@ -85,6 +85,7 @@ Tree protocol-name->interface-name->events->((event-name . bindat-spec) ...)
          (,name strz (str-len))
          (align 4)))
       ((or "int" "fixed" "array" "fd" "enum")
+       ;; Use https://github.com/skeeto/bitpack ?
        `((,name not-implemented))))))
 
 ;;; Objects
