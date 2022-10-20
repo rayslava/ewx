@@ -806,6 +806,15 @@ static void server_new_xdg_surface(struct wl_listener *listener, void *data) {
                 &view->request_fullscreen);
 }
 
+struct ews_layout { 
+  uint32_t test;
+};
+
+static void ews_layout_handle_bind(struct wl_client *client, void *data,
+                                   uint32_t version, uint32_t id) {
+  struct ews_layout *layout = data;
+}
+
 int main(int argc, char *argv[]) {
   wlr_log_init(WLR_DEBUG, NULL);
   char *startup_cmd = NULL;
@@ -975,6 +984,12 @@ int main(int argc, char *argv[]) {
   server.request_set_selection.notify = seat_request_set_selection;
   wl_signal_add(&server.seat->events.request_set_selection,
                 &server.request_set_selection);
+
+  /* ewp */
+  struct ews_layout layout;
+  /* wl_display, wl_interface, version, *data, bind */
+  wl_global_create(server.wl_display, &ewp_layout_interface,
+                   1, &layout, ews_layout_handle_bind);
 
   /* Add a Unix socket to the Wayland display. */
   const char *socket = wl_display_add_socket_auto(server.wl_display);
