@@ -27,7 +27,7 @@
 #include <wlr/types/wlr_server_decoration.h>
 #include <wlr/util/log.h>
 #include <xkbcommon/xkbcommon.h>
-#include <ewp-protocol.h>
+#include "ewp-protocol.h"
 
 /* For brevity's sake, struct members are annotated where they are used. */
 enum tinywl_cursor_mode {
