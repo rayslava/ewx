@@ -197,7 +197,7 @@ Tree protocol-name->interface-name->events->((event-name . bindat-spec) ...)
                 arguments))
          (head (bindat-pack ewc-header `((id . ,(ewc-objects-path->id protocol interface))
                                          (opcode . ,(ewc-alist-key->index
-                                                     (bindat-get-field protocol interface 'requests)
+                                                     (bindat-get-field ewc-protocols protocol interface 'requests)
                                                      request))
                                          (len . ,(+ 8 (length body)))))))
     (concat head body)))
