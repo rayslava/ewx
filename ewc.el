@@ -117,11 +117,11 @@ Tree protocol-name->interface-name->events->((event-name . bindat-spec) ...)
          (- length ,id))))))
 
 (define-inline ewc-objects-id->path (id)
+  (declare (gv-expander
+            (lambda (_do _id) (error "Path is read-only"))))
   (inline-quote
    (nth (ewc-objects--nth ,id)
         (ewc-objects-path ewc-objects))))
-(gv-define-expander ewc-objects-id->path
-  (lambda (_do _id) (error "Path is read-only")))
 
 (define-inline ewc-objects-id->data (id)
   (inline-quote
