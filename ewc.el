@@ -7,6 +7,39 @@
 
 (require 'bindat)
 
+;;; Objects -> Commentary:
+;; => [2022-10-20 Thu]
+
+OBJECTS
+
+interface -> object
+;; the interface is the blueprint; it becomes alive as an object
+
+(object) -> data
+(setf (object) data) | (object data)
+
+(ewc-protocol xml . interface) -> (protocol
+                                   (interface (ue ...)  (pe ...) . (listener ...))
+                                   ...) ; compiled ; only listener is rw
+
+(setf (ewc-listener protocol interface event) listener)
+
+(ewc-object protocol interface) -> #s(ewc-object
+                                      protocol
+                                      interface
+                                      id ; add new object to ewc-objects -> id
+                                      data     ; only rw field
+                                      (ue ...) ; shared
+                                      (pe ...) ; shared ; how to look up? by request name? (request . pe) ?
+                                      (listener ...) ; shared
+                                      )
+
+(ewc-request object request . (named args)) -> id & opcode & pe -> msg
+
+(ewc-event str) -> id & opcode -> lookup object -> ue & listener -> (listener object msg)
+
+;; Seems sound: short & concise :)
+
 ;;; Helper
 ;; Why is this not build in?
 (defun ewc-alist-key->index (alist key)
