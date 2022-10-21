@@ -1,11 +1,5 @@
 ;;; ewc.el --- A wayland client in elisp:) -*- lexical-binding: t; -*-
 
-;;; Code:
-(require 'cl-macs)
-(require 'pcase)
-(require 'map)
-
-(require 'bindat)
 
 ;;; Objects -> Commentary:
 ;; => [2022-10-20 Thu]
@@ -39,6 +33,13 @@ interface -> object
 (ewc-event str) -> id & opcode -> lookup object -> ue & listener -> (listener object msg)
 
 ;; Seems sound: short & concise :)
+
+;;; Code:
+(require 'cl-macs)
+(require 'pcase)
+(require 'map)
+
+(require 'bindat)
 
 ;;; Helper
 ;; Why is this not build in?
