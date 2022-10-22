@@ -13,7 +13,7 @@ interface -> object
 (setf (object) data) | (object data)
 
 (ewc-protocol xml . interface) -> (protocol
-                                   (interface (ue ...)  (pe ...) . (listener ...))
+                                   (interface version ((name ue . listener) ...) ((name . pe) ...))
                                    ...) ; compiled ; only listener is rw
 
 (setf (ewc-listener protocol interface event) listener)
@@ -23,9 +23,8 @@ interface -> object
                                       interface
                                       id ; add new object to ewc-objects -> id
                                       data     ; only rw field
-                                      (ue ...) ; shared
-                                      (pe ...) ; shared ; how to look up? by request name? (request . pe) ?
-                                      (listener ...) ; shared
+                                      ((name ue . listener) ...) ; shared ; set by name
+                                      ((name . pe) ...) ; shared ; looked up by name
                                       )
 
 (ewc-request object request . (named args)) -> id & opcode & pe -> msg
