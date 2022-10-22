@@ -114,7 +114,7 @@ This is the elisp version of wayland-scanner."
   (let ((name (ewc-node-name node)))
     (pcase (dom-attr node 'type)
       ((and "new_id" (guard (not (dom-attr node 'interface))))
-       `((_ uint 32 t)
+       `((interface-len uint 32 t)
          (interface strz)
          (_ align 4)
          (version uint 32 t)
@@ -124,7 +124,7 @@ This is the elisp version of wayland-scanner."
       ("int"
        `((,name sint 32 t)))
       ("string"
-       `((_ uint 32 t)
+       `((,(intern (format "%s-len" name)) uint 32 t)
          (,name strz)
          ;; Hack: If not constructed with list this leads to circular lists due to nconc.
          ;; Have a look at the expansion of this backquote and (elisp) Repeated Expansion.
