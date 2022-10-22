@@ -1,5 +1,6 @@
 ;;; ewc.el --- A wayland client in elisp:) -*- lexical-binding: t; -*-
 
+;; Package-Requires: ((emacs "28.2"))
 
 ;;; Objects -> Commentary:
 ;; => [2022-10-20 Thu]
@@ -50,76 +51,87 @@ interface -> object
             (throw 'found index)
           (cl-incf index))))))
 
-;;; Protocol
-;; Read wayland xml protocols
+;;; Read wayland xml protocols
 ;; enums are not implemented
 
-(defvar ewc-protocols nil
-  "
-Tree protocol-name->interface-name->events->((event-name . bindat-spec) ...)
-                                  ->requests->((request-name . bindat-spec) ...)")
-;; ewc-protocols is seeded from protocol xml.
-;; It is a tree for readability and to have request and event lists.
+;; wayland-scanner implemented as a macro. This makes compiling of the
+;; wayland protocols possible, which is mainly relevant for the
+;; contained bindat pack and unpack functions.
+;; Use it this way:
+;; (defvar wayland-protocols
+;;   (ewc-read "protocol1.xml"
+;;             ("protocol2.xml" interface1 interface3)))
 
-;; (protocol-name
-;;  (interface-name
-;;   (events
-;;    (event-name . spec)
-;;    ...)
-;;   (requests
-;;    (request-name . spec)
-;;    ...))
-;;  ...)
+(defmacro ewc-read (&rest protocol)
+  "Read wayland PROTOCOLs from  xml files into elisp.
+Each PROTOCOL is either a path to a wayland xml protocol
+or a list (path interface ...) restricting the interfaces
+read to those specified.
 
-(defun ewc-protocol-read (xml-protocol-file)
-  ;; This is wayland-scanner
-  (pcase-let* ((node (with-current-buffer (find-file-noselect xml-protocol-file)
-                       (libxml-parse-xml-region (point-min) (point-max))))
-               (`(,protocol . ,interfaces) (ewc-protocol node)))
-    (setf (map-elt ewc-protocols protocol) interfaces)))
+This is the elisp version of wayland-scanner."
+  ;; (protocol ...)
+  `(list ,@(mapcar #'ewc-read-protocol protocol)))
 
-(defsubst ewc-node-name (node)
-  (intern (string-replace "_" "-" (dom-attr node 'name))))
+(define-inline  ewc-node-name (node)
+  (inline-quote
+   (intern (string-replace "_" "-" (dom-attr ,node 'name)))))
 
-(defun ewc-protocol (node)
-  ;; (protocol interface... ...)
-  (cons (ewc-node-name node)
-        (mapcar #'ewc-protocol-interface (dom-by-tag node 'interface))))
+(defun ewc-read-protocol (protocol &optional select-interfaces)
+  (unless (stringp protocol)
+    (setq select-interfaces (cdr protocol))
+    (setq protocol (car protocol)))
 
-(defun ewc-protocol-interface (node)
-  ;; (interface event... request... ...)
-  (list (ewc-node-name node)
-        (cons 'events
-              (mapcar #'ewc-protocol-msg (dom-by-tag node 'event)))
-        (cons 'requests
-              (mapcar #'ewc-protocol-msg (dom-by-tag node 'request)))))
+  (let ((protocol (with-current-buffer (find-file-noselect protocol)
+                    (libxml-parse-xml-region (point-min) (point-max)))))
+    ;; (protocol interface ...)
+    `(cons ',(ewc-node-name protocol)
+           (list ,@(mapcar #'ewc-read-interface
+                           (let ((interfaces (dom-by-tag protocol 'interface)))
+                             (if select-interfaces
+                                 (map-filter (lambda (key _) (member key select-interfaces)) interfaces)
+                               interfaces)))))))
 
-(defun ewc-protocol-msg (node)
-  ;; (event | request name arg ...)
-  (cons (ewc-node-name node)
-        (mapcan #'ewc-protocol-arg (dom-by-tag node 'arg))))
+(defun ewc-read-interface (interface)
+  ;; (interface version (event ...) (request ...))
+  `(list ',(ewc-node-name interface)
+         ,(string-to-number (dom-attr interface 'version))
+         (list ,@(mapcar #'ewc-read-event (dom-by-tag interface 'event)))
+         (list ,@(mapcar #'ewc-read-request (dom-by-tag interface 'request)))))
 
-(defun ewc-protocol-arg (node)
-  ;; (arg name type ...)
+(defun ewc-read-event (event)
+  ;; (event ue . listener)
+  `(list ',(ewc-node-name event)
+         ,(bindat--toplevel 'unpack (mapcan #'ewc-read-arg (dom-by-tag event 'arg)))))
+
+(defun ewc-read-request (request)
+  ;; (request . pe)
+  `(cons ',(ewc-node-name request)
+         ,(bindat--toplevel 'pack (mapcan #'ewc-read-arg (dom-by-tag request 'arg)))))
+
+(defun ewc-read-arg (node)
   (let ((name (ewc-node-name node)))
     (pcase (dom-attr node 'type)
       ((and "new_id" (guard (not (dom-attr node 'interface))))
-       `((str-len u32r)
-         (interface strz (str-len))
-         (align 4)
-         (version u32r)
-         (,name u32r)))
+       `((_ uint 32 t)
+         (interface strz)
+         (_ align 4)
+         (version uint 32 t)
+         (,name uint 32 t)))
       ((or "uint" "object" "new_id")
-       `((,name u32r)))
+       `((,name uint 32 t)))
+      ("int"
+       `((,name sint 32 t)))
       ("string"
-       ;; Version without named str-len (using (eval last) or (-1) as
-       ;; len do not work.
-       `((str-len u32r)
-         (,name strz (str-len))
-         (align 4)))
-      ((or "int" "fixed" "array" "fd" "enum")
+       `((_ uint 32 t)
+         (,name strz)
+         (_ align 4)))
+      ((or "fixed" "array" "fd")
+       ;; fixed: ((integer sint 24 t) (decimal uint 8 t))
+       ;; fd: file descriptor passed via msg_control -> can't be done in elisp
        ;; Use https://github.com/skeeto/bitpack ?
        `((,name not-implemented))))))
+
+(defvar ewc-protocols nil "")
 
 ;;; Objects
 ;; Manage the objects in the current session
