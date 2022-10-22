@@ -126,7 +126,9 @@ This is the elisp version of wayland-scanner."
       ("string"
        `((_ uint 32 t)
          (,name strz)
-         (_ align 4)))
+         ;; Hack: If not constructed with list this leads to circular lists due to nconc.
+         ;; Have a look at the expansion of this backquote and (elisp) Repeated Expansion.
+         ,(list '_ 'align 4)))        
       ((or "fixed" "array" "fd")
        ;; fixed: ((integer sint 24 t) (decimal uint 8 t))
        ;; fd: file descriptor passed via msg_control -> can't be done in elisp
