@@ -136,7 +136,7 @@ An idea in design space:
   Emacs does moving of windows; eg move by dragging modeline
 
   *Unification*
-  # This approad seems simpler with less duplication between C & Lisp.
+  # This approach seems simpler with less duplication between C & Lisp.
 
 *** Make emacs react to event:
 Use make-network-process over socket
@@ -227,6 +227,28 @@ But also some way to say from emacs: Give these keys to emacs.
 And simulated keys over protocol.
 Maybe keytranslation | interception tools style?
 
+** Implementation
+[2022-10-20 Thu]
+
+*** ewc-protocols
+| Used like:                                  | in                         |
+| protocol interface event -get> opcode       | ewc-objects-path->listener |
+| protocol interface -get> event-count        | ewc-objects-add            |
+| protocol interface opcode -get> bindat-type | ewc-parse                  |
+| protocol interface opcode -get> bindat-type | ewc-print                  |
+| protocol interface request -get> opcode     | ewc-print                  |
+
+
+*** ewc-objects
+| Used like:                  | in        |
+| id -get> protocol interface | ewc-parse |
+| id opcode -get> listener    | ewc-parse |
+| protocol interface -get> id | ewc-print |
+
+
 * Webcam & mpv
 [2022-10-14 Fri]
 mpv --profile=low-latency --untimed /dev/video0
+
+* OK it's here :) emacs can wayland now                            :blogpost:
+[2022-10-21 Fri]
