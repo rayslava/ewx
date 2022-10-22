@@ -14,9 +14,10 @@ interface -> object
 (setf (object) data) | (object data)
 
 (ewc-protocol xml . interface) -> (protocol
-                                   (interface version ((name ue . listener) ...) ((name . pe) ...))
+                                   (interface version ((name ue . listener) ...) ((name opcode le . pe) ...))
                                    ...) ; compiled ; only listener is rw
 
+;; A listener is an event callback.
 (setf (ewc-listener protocol interface event) listener)
 
 (ewc-object protocol interface) -> #s(ewc-object
@@ -25,7 +26,7 @@ interface -> object
                                       id ; add new object to ewc-objects -> id
                                       data     ; only rw field
                                       ((name ue . listener) ...) ; shared ; set by name
-                                      ((name . pe) ...) ; shared ; looked up by name
+                                      ((name opcode le . pe) ...) ; shared ; looked up by name
                                       )
 
 (ewc-request object request . (named args)) -> id & opcode & pe -> msg
@@ -36,20 +37,11 @@ interface -> object
 
 ;;; Code:
 (require 'cl-macs)
-(require 'pcase)
+(require 'seq)
 (require 'map)
+(require 'pcase)
 
 (require 'bindat)
-
-;;; Helper
-;; Why is this not build in?
-(defun ewc-alist-key->index (alist key)
-  (let ((index 0))
-    (catch 'found
-      (while alist
-        (if (eq key (car (pop alist)))
-            (throw 'found index)
-          (cl-incf index))))))
 
 ;;; Read wayland xml protocols
 ;; enums are not implemented
@@ -72,7 +64,7 @@ This is the elisp version of wayland-scanner."
   ;; (protocol ...)
   `(list ,@(mapcar #'ewc-read-protocol protocol)))
 
-(define-inline  ewc-node-name (node)
+(define-inline ewc-node-name (node)
   (inline-quote
    (intern (string-replace "_" "-" (dom-attr ,node 'name)))))
 
@@ -93,21 +85,26 @@ This is the elisp version of wayland-scanner."
 
 (defun ewc-read-interface (interface)
   ;; (interface version (event ...) (request ...))
-  `(list ',(ewc-node-name interface)
-         ,(string-to-number (dom-attr interface 'version))
-         (list ,@(mapcar #'ewc-read-event (dom-by-tag interface 'event)))
-         (list ,@(mapcar #'ewc-read-request (dom-by-tag interface 'request)))))
+  `(list
+    ',(ewc-node-name interface)
+    ,(string-to-number (dom-attr interface 'version))
+    (list ,@(mapcar #'ewc-read-event (dom-by-tag interface 'event)))
+    (list ,@(seq-map-indexed #'ewc-read-request (dom-by-tag interface 'request)))))
 
 (defun ewc-read-event (event)
   ;; (event ue . listener)
   `(list ',(ewc-node-name event)
          ,(bindat--toplevel 'unpack (mapcan #'ewc-read-arg (dom-by-tag event 'arg)))))
 
-(defun ewc-read-request (request)
-  ;; (request . pe)
-  `(cons ',(ewc-node-name request)
-         ,(bindat--toplevel 'pack (mapcan #'ewc-read-arg (dom-by-tag request 'arg)))))
+(defun ewc-read-request (request opcode)
+  (let ((spec (mapcan #'ewc-read-arg (dom-by-tag request 'arg))))
+    ;; (request . pe)
+    `(cons ',(ewc-node-name request)
+           (cons ,opcode
+            (cons ,(bindat--toplevel 'length spec)
+                  ,(bindat--toplevel 'pack spec))))))
 
+;; TODO: Wayland uses cpu endianess. Detect it or make it configurable.
 (defun ewc-read-arg (node)
   (let ((name (ewc-node-name node)))
     (pcase (dom-attr node 'type)
@@ -134,165 +131,130 @@ This is the elisp version of wayland-scanner."
 (defvar ewc-protocols nil "")
 
 ;;; Objects
-;; Manage the objects in the current session
+;; implementing the wayland interfaces.
+
+(cl-defstruct (ewc-object (:constructor ewc-object--make)
+                          (:copier nil))
+  (protocol nil :type symbol :read-only t)
+  (interface nil :type symbol :read-only t)
+  (id nil :type integer :read-only t)
+  (data nil :read-only nil)
+  (events nil :type list :read-only nil) ; -> Allow listener to be set.
+  (requests nil :type list :read-only))
+;; Add version?
+
 (defvar ewc-objects nil
   "List of `ewc-objects' in current session.")
 
-(cl-defstruct (ewc-objects (:constructor ewc-objects-make)
-                           (:copier nil))
-  ;; In both lists newer objects are first.
-  (path nil :type list)                 ; ((protocol . interface) ...)
-  (data nil :type list)                 ; (data ...)
-  ;; A listener is an event callback.
-  (listener nil :type list)             ; ([listener ...] ...)
-  ;;                                      a list of vectors with
-  ;;                                      length equal to the objects
-  ;;                                      event count
-  (length 0 :type (integer 0 *)))
+(defun ewc-object (protocol interface &optional data)
+  "Generate an object from INTERFACE of PROTOCOL with optional DATA."
+  (pcase-let* ((`(,_version ,events ,requests)
+                (thread-last
+                  ewc-protocols
+                  (alist-get protocol)
+                  (alist-get interface)))
+               (object (ewc-object--make
+                        :protocol protocol
+                        :interface interface
+                        :id (1+ (length ewc-objects))
+                        :data data
+                        :events events
+                        :requests requests)))
+    (setq ewc-objects (nconc ewc-objects (list object)))
+    object))
 
-;; define-inline lets ewc-objects-id->data and ewc-objects-path->data be used as gv place forms.
-;; Setting path this way is explicitly forbidden and produces an error.
-
-(define-inline ewc-objects--nth (id)
-  (inline-letevals (id)
-    (inline-quote
-     (let ((length (ewc-objects-length ewc-objects)))
-       (if (< length ,id)
-           (1+ length)
-         (- length ,id))))))
-
-(define-inline ewc-objects-id->path (id)
-  (declare (gv-expander
-            (lambda (_do _id) (error "Path is read-only"))))
+;; This sets the listener for all objects.
+;; define-inline makes ewc-listener usable with setf.
+(define-inline ewc-listener (object event)
+  "Return listener for event."
   (inline-quote
-   (nth (ewc-objects--nth ,id)
-        (ewc-objects-path ewc-objects))))
-
-(define-inline ewc-objects-id->data (id)
-  (inline-quote
-   (nth (ewc-objects--nth ,id)
-        (ewc-objects-data ewc-objects))))
-
-(define-inline ewc-objects-id->listener (id opcode)
-  (inline-quote
-   (aref
-    (nth (ewc-objects--nth ,id)
-         (ewc-objects-listener ewc-objects))
-    ,opcode)))
-
-;; The path interface always returns the newest object with this path
-;; Return all instead? Eg. for wl_output?
-
-(define-inline ewc-objects-path->id (protocol interface)
-  (inline-quote
-   (length (member (cons ,protocol ,interface)
-                   (ewc-objects-path ewc-objects)))))
-
-(define-inline ewc-objects-path->data (protocol interface)
-  (inline-quote
-   (ewc-objects-id->data (ewc-objects-path->id ,protocol ,interface))))
-
-(define-inline ewc-objects-path->listener (protocol interface event)
-  (inline-letevals (protocol interface)
-    (inline-quote
-     (ewc-objects-id->listener (ewc-objects-path->id ,protocol ,interface)
-                               (ewc-alist-key->index (bindat-get-field ewc-protocols ,protocol ,interface 'events)
-                                                     ,event)))))
-
-(defun ewc-objects-add (protocol interface data)
-  (push (cons protocol interface) (ewc-objects-path ewc-objects))
-  (push data (ewc-objects-data ewc-objects))
-  (push (make-vector (length (bindat-get-field ewc-protocols protocol interface 'events))
-                     nil)
-        (ewc-objects-listener ewc-objects))
-  (cl-incf (ewc-objects-length ewc-objects)))
+   (cdr (alist-get ,event (ewc-object-events ,object)))))
 
 ;;; Parse and print wayland wire messages
-(defvar ewc-header
-  '((id u32r)
-    (opcode u16r)
-    (len u16r)))
+(defvar ewc-msg-head
+  (bindat-type (id uint 32 t)
+               (opcode uint 16 t)
+               (len uint 16 t)))
 
-(defun ewc-parse (str str-len idx)
-  "Parse wayland wire message STRing with STR-LENength starting at IDX."
-  (pcase-let* (((map id opcode len) (bindat-unpack ewc-header str idx))
-               (`(,protocol . ,interface) (ewc-objects-id->path id))
-               (listener (or (ewc-objects-id->listener id opcode)
-                             #'princ))) ; DEBUG?
-
-    ;; DEBUG
-    (message "rx: id=%s opcode=%s len=%s protocol=%s interface=%s"
-             id opcode len protocol interface)
-
-    (funcall
-     listener
-     (bindat-unpack
-      (cdr (bindat-get-field ewc-protocols protocol interface 'events opcode))
-      str
-      (+ idx 8)))
-    
-    (let ((idx (+ idx len)))
-      (unless (= str-len idx)
-        (ewc-parse str str-len idx)))))
-
-(defun ewc-print (protocol interface request arguments)
-  "Print wayland wire message for PROTOCOL INTERFACE REQUEST with ARGUMENTS."
-  (let* ((body (bindat-pack
-                (bindat-get-field ewc-protocols protocol interface 'requests request)
-                arguments))
-         (head (bindat-pack ewc-header `((id . ,(ewc-objects-path->id protocol interface))
-                                         (opcode . ,(ewc-alist-key->index
-                                                     (bindat-get-field ewc-protocols protocol interface 'requests)
-                                                     request))
-                                         (len . ,(+ 8 (length body)))))))
+(defun ewc-event (str str-len idx)
+  "Parse wayland event wire message STRing with STR-LENength starting at IDX
+and dispatch to the events listener."
+  (pcase-let*
+      ((bindat-idx idx)
+       (bindat-raw str)
+       ((map id opcode _len) (funcall (bindat--type-ue ewc-msg-head)))
+       (object (nth (1+ id) ewc-objects))
+       (`(,_event ,ue . ,listener) (nth opcode (ewc-object-events object))))
 
     ;; DEBUG
-    (message "Sending: msg=\"%s\"\"%s\"" head body)
+    (message "rx: id=%s opcode=%s object=%s"
+             id opcode object)
+
+    (funcall listener object (funcall ue))
     
-    (concat head body)))
+    (unless (= str-len bindat-idx)
+      (ewc-event bindat-raw str-len bindat-idx))))
+
+(defun ewc-pack (object request arguments)
+  "Return wayland REQUEST wire message for OBJECT with ARGUMENTS."
+  (pcase-let*
+      ((`(,_ ,opcode ,le . ,pe) (assq request (ewc-object-requests object)))
+       (bindat-idx 0)
+       (len (+ 8 (funcall le arguments)))
+       (bindat-idx 0)
+       (bindat-raw (make-string len 0)))
+
+    (funcall (bindat--type-pe ewc-msg-head) `((id . ,(object-id object))
+                                              (opcode . ,opcode)
+                                              (len . ,len)))
+    (funcall pe arguments)
+
+    bindat-raw))
 
 ;;; wl-display
 (defun ewc-filter (proc str)
   ;; DEBUG
   (with-current-buffer (get-buffer-create "*wayland*")
     (insert str))
-  (ewc-parse str (length str) 0))
+
+  (ewc-event str (length str) 0))
 
 (defun ewc-connect ()
   ;; | ewc-init
   (if (and ewc-objects
-           (process-live-p (ewc-objects-id->data 1)))
+           (process-live-p (nth 0 ewc-objects)))
       (message "Emacs wayland client already connected")
-    (setq ewc-objects (ewc-objects-make))
-    (ewc-objects-add 'wayland 'wl-display
-                     (make-network-process
-                      :name "emacs-wayland-client"
-                      :remote "/run/user/1000/wayland-0" ; TODO: Make configurable/ detect.
-                      :coding 'binary
-                      :filter #'ewc-filter))
+    (setq ewc-objects nil)
+    (ewc-object  'wayland 'wl-display
+                 (make-network-process
+                  :name "emacs-wayland-client"
+                  :remote "/run/user/1000/wayland-0" ; TODO: Make configurable/ detect.
+                  :coding 'binary
+                  :filter #'ewc-filter))
     (message "Emacs wayland client connected")))
 
-(defun ewc-request (protocol interface request arguments)
-  (process-send-string (ewc-objects-id->data 1) (ewc-print protocol interface request arguments)))
+(defun ewc-request (object request arguments)
+  (process-send-string (nth 0 ewc-objects) (ewc-pack object request arguments)))
 
 ;; TODO: Add cleanup fn
 
 ;;; wl-registry
 (defun ewc-get-registry ()
-  (let ((new-id (ewc-objects-add 'wayland 'wl-registry nil)))
+  (let ((registry (ewc-object 'wayland 'wl-registry)))
     ;; Add global listener
-    (setf (ewc-objects-path->listener 'wayland 'wl-registry 'global)
-          (pcase-lambda ((map name interface version))
+    (setf (ewc-listener registry 'global)
+          (pcase-lambda (object (map name interface version))
             ;; Add interface to this registries data
             (push `(,name (interface . ,interface) (version . ,version))
-                  (ewc-objects-id->data new-id))))
+                  (ewc-object-data object))))
     ;; Issue the request
-    (ewc-request 'wayland 'wl-display 'get-registry `((registry . ,new-id)))
-    new-id))
+    (ewc-request (nth 0 ewc-objects) 'get-registry `((registry . ,(ewc-object-id registry))))
+    registry))
 
 ;;; Test
 ;; Experimentar
-(ewc-protocol-read "~/s/wayland/ref/wayland/protocol/wayland.xml")
+(setq ewc-protocols
+      (ewc-read "~/s/wayland/ref/wayland/protocol/wayland.xml"))
 (ewc-protocol-read "~/s/wayland/ewp.xml")
 ;; =>
 ;; (emacs_wayland_protocol
@@ -315,55 +277,15 @@ This is the elisp version of wayland-scanner."
 
 (ewc-connect)
 
-;; now ewc-objects-* can be tested
-(ewc-objects-id->path 0)
-;; => nil
-(ewc-objects-id->path 1)
-;; => (wayland . wl-display)
-(ewc-objects-id->path 2)
-;; => nil
+ewc-objects
+;; (#s(ewc-object wayland wl-display 1
+;;                #<process emacs-wayland-client> ((sync 0 ... closure ... ... ...) (get-registry 1 ... closure ... ... ...)) nil))
 
 (ewc-get-registry)
 ;; => 2
 
-(ewc-objects-id->data 2)
-;; =>
-;; ((12
-;;   (interface . "wl_output")
-;;   (version . 4))
-;;  (11
-;;   (interface . "ewp_layout")
-;;   (version . 1))
-;;  (10
-;;   (interface . "wl_seat")
-;;   (version . 8))
-;;  (9
-;;   (interface . "org_kde_kwin_server_decoration_manager")
-;;   (version . 1))
-;;  (8
-;;   (interface . "zxdg_decoration_manager_v1")
-;;   (version . 1))
-;;  (7
-;;   (interface . "xdg_wm_base")
-;;   (version . 3))
-;;  (6
-;;   (interface . "wl_data_device_manager")
-;;   (version . 3))
-;;  (5
-;;   (interface . "wl_subcompositor")
-;;   (version . 1))
-;;  (4
-;;   (interface . "wl_compositor")
-;;   (version . 5))
-;;  (3
-;;   (interface . "zwp_linux_dmabuf_v1")
-;;   (version . 4))
-;;  (2
-;;   (interface . "wl_drm")
-;;   (version . 2))
-;;  (1
-;;   (interface . "wl_shm")
-;;   (version . 1)))
+(ewc-object-data (nth 1 ewc-objects))
+;; => nil
 
 ;; Move to ewm.el?
 ;; or this is ewc-XXX-bind = bind an object from the registry
