@@ -64,6 +64,9 @@ This is the elisp version of wayland-scanner."
   ;; (protocol ...)
   `(list ,@(mapcar #'ewc-read-protocol protocol)))
 
+(defvar bindat-raw)
+(defvar bindat-idx)
+
 (define-inline ewc-node-name (node)
   (inline-quote
    (intern (string-replace "_" "-" (dom-attr ,node 'name)))))
@@ -96,13 +99,15 @@ This is the elisp version of wayland-scanner."
   `(list ',(ewc-node-name event)
          ,(bindat--toplevel 'unpack (mapcan #'ewc-read-arg (dom-by-tag event 'arg)))))
 
+;; mapcan instead of append & mapcar produces loops
+
 (defun ewc-read-request (request opcode)
   (let ((spec (mapcan #'ewc-read-arg (dom-by-tag request 'arg))))
     ;; (request . pe)
     `(cons ',(ewc-node-name request)
            (cons ,opcode
-            (cons ,(bindat--toplevel 'length spec)
-                  ,(bindat--toplevel 'pack spec))))))
+                 (cons ,(bindat--toplevel 'length spec)
+                       ,(bindat--toplevel 'pack spec))))))
 
 ;; TODO: Wayland uses cpu endianess. Detect it or make it configurable.
 (defun ewc-read-arg (node)
@@ -139,8 +144,8 @@ This is the elisp version of wayland-scanner."
   (interface nil :type symbol :read-only t)
   (id nil :type integer :read-only t)
   (data nil :read-only nil)
-  (events nil :type list :read-only nil) ; -> Allow listener to be set.
-  (requests nil :type list :read-only))
+  (events nil :type list :read-only t)
+  (requests nil :type list :read-only t))
 ;; Add version?
 
 (defvar ewc-objects nil
@@ -183,7 +188,7 @@ and dispatch to the events listener."
       ((bindat-idx idx)
        (bindat-raw str)
        ((map id opcode _len) (funcall (bindat--type-ue ewc-msg-head)))
-       (object (nth (1+ id) ewc-objects))
+       (object (nth (1- id) ewc-objects))
        (`(,_event ,ue . ,listener) (nth opcode (ewc-object-events object))))
 
     ;; DEBUG
@@ -204,7 +209,7 @@ and dispatch to the events listener."
        (bindat-idx 0)
        (bindat-raw (make-string len 0)))
 
-    (funcall (bindat--type-pe ewc-msg-head) `((id . ,(object-id object))
+    (funcall (bindat--type-pe ewc-msg-head) `((id . ,(ewc-object-id object))
                                               (opcode . ,opcode)
                                               (len . ,len)))
     (funcall pe arguments)
@@ -234,7 +239,7 @@ and dispatch to the events listener."
     (message "Emacs wayland client connected")))
 
 (defun ewc-request (object request arguments)
-  (process-send-string (nth 0 ewc-objects) (ewc-pack object request arguments)))
+  (process-send-string (ewc-object-data (nth 0 ewc-objects)) (ewc-pack object request arguments)))
 
 ;; TODO: Add cleanup fn
 
