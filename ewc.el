@@ -5,33 +5,33 @@
 ;;; Objects -> Commentary:
 ;; => [2022-10-20 Thu]
 
-OBJECTS
+;; OBJECTS
 
-interface -> object
-;; the interface is the blueprint; it becomes alive as an object
+;; interface -> object
+;; ;; the interface is the blueprint; it becomes alive as an object
 
-(object) -> data
-(setf (object) data) | (object data)
+;; (object) -> data
+;; (setf (object) data) | (object data)
 
-(ewc-protocol xml . interface) -> (protocol
-                                   (interface version ((name ue . listener) ...) ((name opcode le . pe) ...))
-                                   ...) ; compiled ; only listener is rw
+;; (ewc-protocol xml . interface) -> (protocol
+;;                                    (interface version ((name ue . listener) ...) ((name opcode le . pe) ...))
+;;                                    ...) ; compiled ; only listener is rw
 
-;; A listener is an event callback.
-(setf (ewc-listener protocol interface event) listener)
+;; ;; A listener is an event callback.
+;; (setf (ewc-listener protocol interface event) listener)
 
-(ewc-object protocol interface) -> #s(ewc-object
-                                      protocol
-                                      interface
-                                      id ; add new object to ewc-objects -> id
-                                      data     ; only rw field
-                                      ((name ue . listener) ...) ; shared ; set by name
-                                      ((name opcode le . pe) ...) ; shared ; looked up by name
-                                      )
+;; (ewc-object protocol interface) -> #s(ewc-object
+;;                                       protocol
+;;                                       interface
+;;                                       id ; add new object to ewc-objects -> id
+;;                                       data     ; only rw field
+;;                                       ((name ue . listener) ...) ; shared ; set by name
+;;                                       ((name opcode le . pe) ...) ; shared ; looked up by name
+;;                                       )
 
-(ewc-request object request . (named args)) -> id & opcode & pe -> msg
+;; (ewc-request object request . (named args)) -> id & opcode & pe -> msg
 
-(ewc-event str) -> id & opcode -> lookup object -> ue & listener -> (listener object msg)
+;; (ewc-event str) -> id & opcode -> lookup object -> ue & listener -> (listener object msg)
 
 ;; Seems sound: short & concise :)
 
@@ -255,60 +255,6 @@ and dispatch to the events listener."
     ;; Issue the request
     (ewc-request (nth 0 ewc-objects) 'get-registry `((registry . ,(ewc-object-id registry))))
     registry))
-
-;;; Test
-;; Experimentar
-(setq ewc-protocols
-      (ewc-read "~/s/wayland/ref/wayland/protocol/wayland.xml"))
-(ewc-protocol-read "~/s/wayland/ewp.xml")
-;; =>
-;; (emacs_wayland_protocol
-;;  (layout
-;;   (events
-;;    (layout-new-window
-;;     (current_output u32r)
-;;     (usable_width u32r)
-;;     (usable_height u32r)
-;;     (tags u32r)
-;;     (title u32r)
-;;     (application u32r)
-;;     (pid u32r)))
-;;   (requests
-;;    (layout-window
-;;     (x u32r)
-;;     (y u32r)
-;;     (width u32r)
-;;     (height u32r)))))
-
-(ewc-connect)
-
-ewc-objects
-;; (#s(ewc-object wayland wl-display 1
-;;                #<process emacs-wayland-client> ((sync 0 ... closure ... ... ...) (get-registry 1 ... closure ... ... ...)) nil))
-
-(ewc-get-registry)
-;; => 2
-
-(ewc-object-data (nth 1 ewc-objects))
-;; => nil
-
-;; Move to ewm.el?
-;; or this is ewc-XXX-bind = bind an object from the registry
-(ewc-objects-add 'emacs-wayland-protocol 'ewp-layout nil)
-;; => 3
-
-(ewc-connect)
-(ewc-get-registry)
-(ewc-request 'wayland 'wl-registry 'bind `((name . 11)
-                                           (str-len . ,(1+ (length "ewp_layout")))
-                                           (interface . "ewp_layout")
-                                           (version . 1)
-                                           (id . 3)))
-(ewc-request 'emacs-wayland-protocol 'ewp-layout 'layout-window '(()))
-
-
-
-(delete-process (ewc-objects-id->data 1))
 
 (provide 'ewc)
 ;;; ewc.el ends here
