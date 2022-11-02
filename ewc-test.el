@@ -1,30 +1,14 @@
-;;; Test
+;;; Test  -*- lexical-binding: t; -*-
 ;; Experimentar
 (setq ewc-protocols
-      (ewc-read "~/s/wayland/ref/wayland/protocol/wayland.xml"))
-(ewc-protocol-read "~/s/wayland/ewp.xml")
-;; =>
-;; (emacs_wayland_protocol
-;;  (layout
-;;   (events
-;;    (layout-new-window
-;;     (current_output u32r)
-;;     (usable_width u32r)
-;;     (usable_height u32r)
-;;     (tags u32r)
-;;     (title u32r)
-;;     (application u32r)
-;;     (pid u32r)))
-;;   (requests
-;;    (layout-window
-;;     (x u32r)
-;;     (y u32r)
-;;     (width u32r)
-;;     (height u32r)))))
+      (ewc-read "~/s/wayland/ref/wayland/protocol/wayland.xml"
+                "~/s/wayland/ewp.xml"))
 
+;; Reset
 (setq ewc-objects nil)
 (delete-process (ewc-object-data (nth 0 ewc-objects)))
 
+;; Setup
 (ewc-connect)
 
 ewc-objects
@@ -32,7 +16,6 @@ ewc-objects
 ;;                #<process emacs-wayland-client> ((sync 0 ... closure ... ... ...) (get-registry 1 ... closure ... ... ...)) nil))
 
 (ewc-get-registry)
-;; => 2
 
 (ewc-object-data (nth 1 ewc-objects))
 ;; =>
@@ -51,17 +34,14 @@ ewc-objects
 
 ;; Move to ewm.el?
 ;; or this is ewc-XXX-bind = bind an object from the registry
-(ewc-objects-add 'emacs-wayland-protocol 'ewp-layout nil)
-;; => 3
+(ewc-object 'emacs-wayland-protocol 'ewp-layout nil)
 
-(ewc-connect)
-(ewc-get-registry)
 (ewc-request (nth 1 ewc-objects) 'bind `((name . 11)
                                          (interface-len . ,(1+ (length "ewp_layout")))
                                          (interface . "ewp_layout")
                                          (version . 1)
                                          (id . 3)))
-(ewc-object 'emacs-wayland-protocol 'ewp-layout)
+
 (ewc-request (nth 2 ewc-objects) 'layout-window '((x . 0)
                                                   (y . 0)
                                                   (width . 0)
