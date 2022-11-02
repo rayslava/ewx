@@ -89,8 +89,6 @@ struct ews_view {
   struct wl_listener map;
   struct wl_listener unmap;
   struct wl_listener destroy;
-  struct wl_listener request_move;
-  struct wl_listener request_resize;
   struct wl_listener request_maximize;
   struct wl_listener request_fullscreen;
   int x, y;
@@ -649,8 +647,6 @@ static void xdg_toplevel_destroy(struct wl_listener *listener, void *data) {
   wl_list_remove(&view->map.link);
   wl_list_remove(&view->unmap.link);
   wl_list_remove(&view->destroy.link);
-  wl_list_remove(&view->request_move.link);
-  wl_list_remove(&view->request_resize.link);
   wl_list_remove(&view->request_maximize.link);
   wl_list_remove(&view->request_fullscreen.link);
 
@@ -693,29 +689,6 @@ static void begin_interactive(struct ews_view *view,
 
     server->resize_edges = edges;
   }
-}
-
-static void xdg_toplevel_request_move(
-                                      struct wl_listener *listener, void *data) {
-  /* This event is raised when a client would like to begin an interactive
-   * move, typically because the user clicked on their client-side
-   * decorations. Note that a more sophisticated compositor should check the
-   * provided serial against a list of button press serials sent to this
-   * client, to prevent the client from requesting this whenever they want. */
-  struct ews_view *view = wl_container_of(listener, view, request_move);
-  begin_interactive(view, EWS_CURSOR_MOVE, 0);
-}
-
-static void xdg_toplevel_request_resize(
-                                        struct wl_listener *listener, void *data) {
-  /* This event is raised when a client would like to begin an interactive
-   * resize, typically because the user clicked on their client-side
-   * decorations. Note that a more sophisticated compositor should check the
-   * provided serial against a list of button press serials sent to this
-   * client, to prevent the client from requesting this whenever they want. */
-  struct wlr_xdg_toplevel_resize_event *event = data;
-  struct ews_view *view = wl_container_of(listener, view, request_resize);
-  begin_interactive(view, EWS_CURSOR_RESIZE, event->edges);
 }
 
 static void xdg_toplevel_request_maximize(
@@ -798,10 +771,6 @@ static void server_new_xdg_surface(struct wl_listener *listener, void *data) {
 
   /* cotd */
   struct wlr_xdg_toplevel *toplevel = xdg_surface->toplevel;
-  view->request_move.notify = xdg_toplevel_request_move;
-  wl_signal_add(&toplevel->events.request_move, &view->request_move);
-  view->request_resize.notify = xdg_toplevel_request_resize;
-  wl_signal_add(&toplevel->events.request_resize, &view->request_resize);
   view->request_maximize.notify = xdg_toplevel_request_maximize;
   wl_signal_add(&toplevel->events.request_maximize,
                 &view->request_maximize);
