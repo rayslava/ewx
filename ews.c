@@ -340,9 +340,8 @@ static void seat_request_set_selection(struct wl_listener *listener, void *data)
   wlr_seat_set_selection(server->seat, event->source, event->serial);
 }
 
-static struct ews_view *desktop_view_at(
-                                           struct ews_server *server, double lx, double ly,
-                                           struct wlr_surface **surface, double *sx, double *sy) {
+static struct ews_view *desktop_view_at(struct ews_server *server, double lx, double ly,
+                                        struct wlr_surface **surface, double *sx, double *sy) {
   /* This returns the topmost node in the scene at the given layout coords.
    * we only care about surface nodes as we are specifically looking for a
    * surface in the surface tree of a ews_view. */
@@ -556,8 +555,7 @@ static void output_frame(struct wl_listener *listener, void *data) {
   struct ews_output *output = wl_container_of(listener, output, frame);
   struct wlr_scene *scene = output->server->scene;
 
-  struct wlr_scene_output *scene_output = wlr_scene_get_scene_output(
-                                                                     scene, output->wlr_output);
+  struct wlr_scene_output *scene_output = wlr_scene_get_scene_output(scene, output->wlr_output);
 
   /* Render the scene if needed and commit the output */
   wlr_scene_output_commit(scene_output);
@@ -761,11 +759,9 @@ static void server_new_xdg_surface(struct wl_listener *listener, void *data) {
    * we always set the user data field of xdg_surfaces to the corresponding
    * scene node. */
   if (xdg_surface->role == WLR_XDG_SURFACE_ROLE_POPUP) {
-    struct wlr_xdg_surface *parent = wlr_xdg_surface_from_wlr_surface(
-                                                                      xdg_surface->popup->parent);
+    struct wlr_xdg_surface *parent = wlr_xdg_surface_from_wlr_surface(xdg_surface->popup->parent);
     struct wlr_scene_tree *parent_tree = parent->data;
-    xdg_surface->data = wlr_scene_xdg_surface_create(
-                                                     parent_tree, xdg_surface);
+    xdg_surface->data = wlr_scene_xdg_surface_create(parent_tree, xdg_surface);
     
     pid_t pid;
     wl_client_get_credentials(parent->client->client, &pid, NULL, NULL);
@@ -774,6 +770,7 @@ static void server_new_xdg_surface(struct wl_listener *listener, void *data) {
     
     return;
   }
+
   assert(xdg_surface->role == WLR_XDG_SURFACE_ROLE_TOPLEVEL);
 
   pid_t pid;
@@ -787,8 +784,7 @@ static void server_new_xdg_surface(struct wl_listener *listener, void *data) {
     calloc(1, sizeof(struct ews_view));
   view->server = server;
   view->xdg_toplevel = xdg_surface->toplevel;
-  view->scene_tree = wlr_scene_xdg_surface_create(
-                                                  &view->server->scene->tree, view->xdg_toplevel->base);
+  view->scene_tree = wlr_scene_xdg_surface_create(&view->server->scene->tree, view->xdg_toplevel->base);
   view->scene_tree->node.data = view;
   xdg_surface->data = view->scene_tree;
 
