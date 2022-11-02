@@ -806,6 +806,27 @@ static void server_new_xdg_surface(struct wl_listener *listener, void *data) {
                 &view->request_fullscreen);
 }
 
+/* emacs wayland protocol */
+
+/* event */
+/* from ewp-protocol.h */
+/* ewp_layout_send_layout_new_window(struct wl_resource *resource_, uint32_t current_output, */
+/*                                   uint32_t usable_width, uint32_t usable_height,  */
+/*                                   uint32_t tags, const char *title, */
+/*                                   const char *application, uint32_t pid) */
+
+static void
+ewp_layout_handle_layout_window(struct wl_client *client, struct wl_resource *resource,
+                                uint32_t x, uint32_t y, uint32_t width, uint32_t height) {
+  /* TODO: implement the request */
+ /* args: x, y, width, height */
+}
+
+static const struct ewp_layout_interface
+ewp_layout_implementation = {
+  .layout_window = ewp_layout_handle_layout_window,
+};
+
 struct ews_layout { 
   uint32_t test;
 };
@@ -813,6 +834,12 @@ struct ews_layout {
 static void ews_layout_handle_bind(struct wl_client *client, void *data,
                                    uint32_t version, uint32_t id) {
   struct ews_layout *layout = data;
+
+  struct wl_resource *resource = wl_resource_create(client, &ewp_layout_interface,
+                                                    version, id);
+
+  /* last=NULL is handle_resource_destroy TODO add maybe */
+  wl_resource_set_implementation(resource, &ewp_layout_implementation, layout, NULL);
 }
 
 int main(int argc, char *argv[]) {
