@@ -1,1 +1,1 @@
-((c-mode . ((c-file-style "GNU"))))
+((c-mode . ((c-file-style . "GNU"))))
