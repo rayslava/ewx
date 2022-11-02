@@ -743,6 +743,14 @@ static void xdg_toplevel_request_fullscreen(
 static void server_new_xdg_surface(struct wl_listener *listener, void *data) {
   /* This event is raised when wlr_xdg_shell receives a new xdg surface from a
    * client, either a toplevel (application window) or popup. */
+
+  /** From wlr_xdg_shell.h
+   * The `new_surface` event signals that a client has requested to
+   * create a new shell surface. At this point, the surface is ready to
+   * be configured but is not mapped or ready receive input events. The
+   * surface will be ready to be managed on the `map` event.
+   */
+
   struct tinywl_server *server =
     wl_container_of(listener, server, new_xdg_surface);
   struct wlr_xdg_surface *xdg_surface = data;
