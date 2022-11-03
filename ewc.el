@@ -265,3 +265,8 @@ and dispatch to the events listener."
 
 (provide 'ewc)
 ;;; ewc.el ends here
+
+;; Must be here to work atm. 
+(setq ewc-protocols
+      (ewc-read "~/s/wayland/ref/wayland/protocol/wayland.xml"
+                "~/s/wayland/ewp.xml"))
