@@ -224,7 +224,7 @@ and dispatch to the events listener."
     bindat-raw))
 
 ;;; wl-display
-(defun ewc-filter (proc str)
+(defun ewc-filter (_proc str)
   ;; DEBUG
   (with-current-buffer (get-buffer-create "*wayland*")
     (insert str))
