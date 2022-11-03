@@ -5,8 +5,8 @@
                 "~/s/wayland/ewp.xml"))
 
 ;; Reset
-(setq ewc-objects nil)
 (delete-process (ewc-object-data (nth 0 ewc-objects)))
+(setq ewc-objects nil)
 
 ;; Setup
 (ewc-connect)
@@ -19,7 +19,8 @@ ewc-objects
 
 (ewc-object-data (nth 1 ewc-objects))
 ;; =>
-;; ((12 (interface . "wl_output") (version . 4))
+;; ((13 (interface . "wl_output") (version . 4))
+;; (12 (interface . "wl_output") (version . 4))
 ;; (11 (interface . "ewp_layout") (version . 1))
 ;; (10 (interface . "wl_seat") (version . 8))
 ;; (9 (interface . "org_kde_kwin_server_decoration_manager") (version . 1))
@@ -49,4 +50,27 @@ ewc-objects
 
 
 
-(delete-process (ewc-objects-id->data 1))
+;;; Test wl_output
+(ewc-object 'wayland 'wl-output nil)
+
+(ewc-request (nth 1 ewc-objects) 'bind `((name . 12)
+                                         (interface-len . ,(1+ (length "wl_output")))
+                                         (interface . "wl_output")
+                                         (version . 4)
+                                         (id . 3)))
+
+;; 2 wl_output s
+(ewc-object 'wayland 'wl-output nil)
+(ewc-object 'wayland 'wl-output nil)
+
+(ewc-request (nth 1 ewc-objects) 'bind `((name . 12)
+                                         (interface-len . ,(1+ (length "wl_output")))
+                                         (interface . "wl_output")
+                                         (version . 4)
+                                         (id . 4)))
+
+(ewc-request (nth 1 ewc-objects) 'bind `((name . 13)
+                                         (interface-len . ,(1+ (length "wl_output")))
+                                         (interface . "wl_output")
+                                         (version . 4)
+                                         (id . 5)))
