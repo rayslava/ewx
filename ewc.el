@@ -194,10 +194,13 @@ and dispatch to the events listener."
        (`(,_event ,ue . ,listener) (nth opcode (ewc-object-events object))))
 
     ;; DEBUG
-    (message "rx: id=%s opcode=%s object=%s"
-             id opcode object)
+    (message "rx: id=%s opcode=%s" id opcode)
 
-    (funcall listener object (funcall ue))
+    ;;        DEBUG nil listener should just ignore the message
+    ;;        -> Could just not call ue but then something else must
+    ;;           advance bindat-idx; use _len?
+    (funcall (or listener (lambda (_ msg) (message "msg: %s" msg)))
+             object (when ue (funcall ue)))
     
     (unless (= str-len bindat-idx)
       (ewc-event bindat-raw str-len bindat-idx))))
@@ -205,16 +208,18 @@ and dispatch to the events listener."
 (defun ewc-pack (object request arguments)
   "Return wayland REQUEST wire message for OBJECT with ARGUMENTS."
   (pcase-let*
-      ((`(,_ ,opcode ,le . ,pe) (assq request (ewc-object-requests object)))
-       (bindat-idx 0)
-       (len (+ 8 (funcall le arguments)))
-       (bindat-idx 0)
-       (bindat-raw (make-string len 0)))
+     ((`(,_ ,opcode ,le . ,pe) (assq request (ewc-object-requests object)))
+      (bindat-idx 0)
+      (len  (+ 8 (if le
+                     (funcall le arguments)
+                   0)))
+      (bindat-idx 0)
+      (bindat-raw (make-string len 0)))
 
     (funcall (bindat--type-pe ewc-msg-head) `((id . ,(ewc-object-id object))
                                               (opcode . ,opcode)
                                               (len . ,len)))
-    (funcall pe arguments)
+    (when pe (funcall pe arguments))
 
     bindat-raw))
 
