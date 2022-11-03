@@ -24,32 +24,39 @@
       An interface for a window manager client
     </description>
 
-    <event name="layout_new_window">
-      <description summary="Layout new window">
-        The server requests a layout for a new window
+    <event name="new_surface">
+      <description summary="New surface">
+        Inform the client after a new surface was added.
+        The client uses the new ewp_surface object to manage this surface.
       </description>
-      <arg name="current_output" type="uint" summary="currently focused output"/>
-      <arg name="usable_width" type="uint" summary="width of the usable area"/>
-      <arg name="usable_height" type="uint" summary="height of the usable area"/>
-      <arg name="tags" type="uint" summary="tags of the output, 32-bit bitfield"/>
-      <arg name="title" type="string" summary="window-title"/>
-      <arg name="application" type="string" summary="application-name"/>
-      <arg name="pid" type="uint" summary="pid"/>
+      <arg name="id" type="new_id" interface="ewp_surface" summary="The new ewp_surface object"/>
     </event>
-    
-    <request name="layout_window">
-      <description summary="Layout window">
-        Position window on output
-        with matching serial.
+  </interface>
+  
+  <interface name="ewp_surface" version="1">
+    <description summary="Manage surface layout">
+      An interface to manage a single toplevel surface.
+    </description>
+
+    <request name="layout">
+      <description summary="Layout surface">
+        Layout surface by setting its x and y position and its width and height size.
+        Shows the surface at x and y of its parent with width and height.
       </description>
       <arg name="x" type="uint" summary="x coordinate of window origin"/>
       <arg name="y" type="uint" summary="y coordinate of window origin"/>
       <arg name="width" type="uint" summary="width of window"/>
       <arg name="height" type="uint" summary="height of window"/>
-      <!-- window and output -->
     </request>
+    <!-- show & hide = map & unmap -->
 
-    <!-- A method to group (and commit) changes? -->
+    <event name="destroy" type="destructor">
+      <description summary="destroy event">
+        Inform the client of the destruction of this interface.
+      </description>
+    </event>
 
   </interface>
 </protocol>
+
+<!-- A method to group (and commit) changes? -->
