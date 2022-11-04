@@ -142,6 +142,7 @@ This is the elisp version of wayland-scanner."
 
 (cl-defstruct (ewc-object (:constructor ewc-object--make)
                           (:copier nil))
+  "A client side object implementing a wayland interface."
   (protocol nil :type symbol :read-only t)
   (interface nil :type symbol :read-only t)
   (id nil :type integer :read-only t)
