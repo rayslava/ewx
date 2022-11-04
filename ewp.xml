@@ -64,6 +64,5 @@
     </event>
 
   </interface>
+  <!-- A method to group (and commit) changes? -->
 </protocol>
-
-<!-- A method to group (and commit) changes? -->
