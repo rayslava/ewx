@@ -49,6 +49,8 @@
       <arg name="height" type="uint" summary="height of window"/>
     </request>
     <!-- show & hide = map & unmap -->
+    <!-- OR layout produces a new object (= mapped surface) that can
+         be requested to be unmapped; this allows for multiple views -->
 
     <event name="destroy" type="destructor">
       <description summary="destroy event">
