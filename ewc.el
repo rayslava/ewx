@@ -151,24 +151,35 @@ This is the elisp version of wayland-scanner."
   (requests nil :type list :read-only t))
 ;; Add version?
 
-(defvar ewc-objects nil
-  "List of `ewc-objects' in current session.")
+(cl-defstruct (ewc-objects (:constructor ewc-objects-make)
+                           (:copier nil))
+  "All objects in the current session.
+new-id is the id of the next client initiated object.
+table is a hash table from object id to `ewc-object'."
+  (new-id 1 :type integer)
+  (table (make-hash-table) :type hash-table :read-only t))
 
-(defun ewc-object (protocol interface &optional data)
-  "Generate an object from INTERFACE of PROTOCOL with optional DATA."
+(defvar ewc-objects nil
+  "Holds the `ewc-objects' of the current session.")
+
+(defun ewc-object (protocol interface &optional data id)
+  "Generate an object from INTERFACE of PROTOCOL with optional DATA.
+Use optional ID for server initiated objects."
   (pcase-let* ((`(,_version ,events ,requests)
                 (thread-last
                   ewc-protocols
                   (alist-get protocol)
                   (alist-get interface)))
+               (id (or id (ewc-objects-new-id ewc-objects)))
                (object (ewc-object--make
                         :protocol protocol
                         :interface interface
-                        :id (1+ (length ewc-objects))
+                        :id id
                         :data data
                         :events events
                         :requests requests)))
-    (setq ewc-objects (nconc ewc-objects (list object)))
+    (puthash id object (ewc-objects-table ewc-objects))
+    (cl-incf (ewc-objects-new-id ewc-objects))
     object))
 
 ;; This sets the listener for all objects.
@@ -191,7 +202,7 @@ and dispatch to the events listener."
       ((bindat-idx idx)
        (bindat-raw str)
        ((map id opcode _len) (funcall (bindat--type-ue ewc-msg-head)))
-       (object (nth (1- id) ewc-objects))
+       (object (gethash id (ewc-objects-table ewc-objects)))
        (`(,_event ,ue . ,listener) (nth opcode (ewc-object-events object))))
 
     ;; DEBUG
@@ -232,12 +243,15 @@ and dispatch to the events listener."
 
   (ewc-event str (length str) 0))
 
+(define-inline ewc-display ()
+  (inline-quote (gethash 1 (ewc-objects-table ewc-objects))))
+
 (defun ewc-connect ()
   ;; | ewc-init
   (if (and ewc-objects
-           (process-live-p (nth 0 ewc-objects)))
+           (process-live-p (ewc-object-data (ewc-display))))
       (message "Emacs wayland client already connected")
-    (setq ewc-objects nil)
+    (setq ewc-objects (ewc-objects-make))
     (ewc-object  'wayland 'wl-display
                  (make-network-process
                   :name "emacs-wayland-client"
@@ -247,7 +261,7 @@ and dispatch to the events listener."
     (message "Emacs wayland client connected")))
 
 (defun ewc-request (object request arguments)
-  (process-send-string (ewc-object-data (nth 0 ewc-objects)) (ewc-pack object request arguments)))
+  (process-send-string (ewc-object-data (ewc-display)) (ewc-pack object request arguments)))
 
 ;; TODO: Add cleanup fn
 
@@ -261,7 +275,7 @@ and dispatch to the events listener."
             (push `(,name (interface . ,interface) (version . ,version))
                   (ewc-object-data object))))
     ;; Issue the request
-    (ewc-request (nth 0 ewc-objects) 'get-registry `((registry . ,(ewc-object-id registry))))
+    (ewc-request (ewc-display) 'get-registry `((registry . ,(ewc-object-id registry))))
     registry))
 
 (provide 'ewc)
