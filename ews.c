@@ -1022,18 +1022,17 @@ int main(int argc, char *argv[]) {
   /* Set the WAYLAND_DISPLAY environment variable to our socket */
   setenv("WAYLAND_DISPLAY", socket, true);
         
-  pid_t pid = fork();
-  if (pid == 0) {
-    execl("/gnu/store/aaga7qf0y93rfxrkwmqwh9z1fpcdn7ii-emacs-next-pgtk-29.0.50-1.0a5477b/bin/emacs", (void *)NULL);
-  }
+  /* pid_t pid = fork(); */
+  /* if (pid == 0) { */
+  /*   execl("/gnu/store/aaga7qf0y93rfxrkwmqwh9z1fpcdn7ii-emacs-next-pgtk-29.0.50-1.0a5477b/bin/emacs", (void *)NULL); */
+  /* } */
   /* server.emacs_pid = pid; */
         
   /* Run the Wayland event loop. This does not return until you exit the
    * compositor. Starting the backend rigged up all of the necessary event
    * loop configuration to listen to libinput events, DRM events, generate
    * frame events at the refresh rate, and so on. */
-  wlr_log(WLR_INFO, "Running Wayland compositor on WAYLAND_DISPLAY=%s with Emacs pid=%d",
-          socket, pid);
+  wlr_log(WLR_INFO, "Running Wayland compositor on WAYLAND_DISPLAY=%s", socket);
   wl_display_run(server.wl_display);
 
   /* Once wl_display_run returns, we shut down the server. */
