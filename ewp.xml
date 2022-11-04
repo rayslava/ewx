@@ -55,6 +55,8 @@
     <!-- OR layout produces a new object (= mapped surface) that can
          be requested to be unmapped; this allows for multiple views -->
 
+    <!-- keep client informed about title changes with event -->
+
     <event name="destroy" type="destructor">
       <description summary="destroy event">
         Inform the client of the destruction of this interface.
