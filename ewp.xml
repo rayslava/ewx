@@ -17,6 +17,24 @@
   </copyright>
 
   <description summary="Let emacs manage wayland windows and input.">
+    One ewp_layout client decides the layout for new surfaces (= windows).
+
+    The wayland server sends the new_surface event on xdg_shell
+    toplevel creation and creates a ewp_surface object.
+
+    The layout client can then layout this ewp_surface object which
+    creates a ewp_view.
+
+    in ewp:   ewp_layout             -> ewp_surface    -> ewp_view
+    in emacs: client=events,requests -> wayland buffer -> wayland buffer shown in window
+
+    ewp_layout object gets notified about new toplevel surfaces -> ewp_surface
+    
+    ewp_surface layout is show or map -> ewp_view
+
+    ewp_view destroy is hide or unmap
+
+    This allows for multiple views.
   </description>
 
   <interface name="ewp_layout" version="1">
