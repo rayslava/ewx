@@ -55,7 +55,12 @@
     <!-- OR layout produces a new object (= mapped surface) that can
          be requested to be unmapped; this allows for multiple views -->
 
-    <!-- keep client informed about title changes with event -->
+    <event name="update_title">
+      <description summary="updated title">
+        Inform the client about a new title for this surface.
+      </description>
+      <arg name="title" type="string" summary="shell title"/>
+    </event>
 
     <event name="destroy" type="destructor">
       <description summary="destroy event">
