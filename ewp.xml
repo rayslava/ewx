@@ -45,15 +45,14 @@
       <description summary="Layout surface">
         Layout surface by setting its x and y position and its width and height size.
         Shows the surface at x and y of its parent with width and height.
+        Creates a view object for this layout.
       </description>
+      <arg name="id" type="new_id" interface="ewp_view" summary="The new ewp_view object"/>
       <arg name="x" type="uint" summary="x coordinate of window origin"/>
       <arg name="y" type="uint" summary="y coordinate of window origin"/>
       <arg name="width" type="uint" summary="width of window"/>
       <arg name="height" type="uint" summary="height of window"/>
     </request>
-    <!-- show & hide = map & unmap -->
-    <!-- OR layout produces a new object (= mapped surface) that can
-         be requested to be unmapped; this allows for multiple views -->
 
     <event name="update_title">
       <description summary="updated title">
@@ -67,7 +66,20 @@
         Inform the client of the destruction of this interface.
       </description>
     </event>
-
   </interface>
+
+  <interface name="ewp_view" version="1">
+    <description summary="A mapped surface">
+      If a ewp_surface is layed out an ewp_view is created. This is its interface.
+    </description>
+
+    <request name="destroy" type="destructor">
+      <description summary="destroy the view">
+        Request destruction of the view. This deletes the ewp_view
+        object and hides it. Destroying the view is equivalent to unmapping the surface.
+      </description>
+    </request>
+  </interface>
+
   <!-- A method to group (and commit) changes? -->
 </protocol>
