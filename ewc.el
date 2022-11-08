@@ -287,7 +287,7 @@ Returns a `ewc-objects' struct with wl-display as object 1."
   "Issue REQUEST with ARGUMENTS of OBJECT
 OBJECT can be an `ewc-object' struct or an id.
 OBJECTS is an `ewc-objects' struct."
-  (process-send-string (ewc-object-get 1 objects)
+  (process-send-string (ewc-object-data (ewc-object-get 1 objects))
                        (ewc-pack
                         (cond
                          ((ewc-object-p object) object)
