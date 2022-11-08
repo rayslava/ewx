@@ -92,7 +92,10 @@ This is the elisp version of wayland-scanner."
            (list ,@(mapcar #'ewc-read-interface
                            (let ((interfaces (dom-by-tag protocol 'interface)))
                              (if select-interfaces
-                                 (map-filter (lambda (key _) (member key select-interfaces)) interfaces)
+                                 (seq-filter
+                                  (lambda (interface)
+                                    (member (ewc-node-name interface) select-interfaces))
+                                  interfaces)
                                interfaces)))))))
 
 (defun ewc-read-interface (interface)
