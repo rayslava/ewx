@@ -71,9 +71,9 @@
     (setf (ewc-listener registry 'global)
           (pcase-lambda (object (map name interface version))
             (pcase interface
-              ("wl_output" (ewb-new-output objects registry outputs name version))
-              ("ewp_layout" (ewb-init-layout objects registry name version)))))
-    (ewc-request objects 1 'get-registry `((registry . ,(ewc-object-id registry))))))
+              ("wl_output" (ewb-new-output registry outputs name version))
+              ("ewp_layout" (ewb-init-layout registry name version)))))
+    (ewc-request (ewc-object-get 1 objects) 'get-registry `((registry . ,(ewc-object-id registry))))))
 
 (let ((update))
   (defun ewb-output-listener (outputs id event)
@@ -90,34 +90,34 @@
          (setq update nil)
          (message "Updated outputs: %s" outputs)))))) ; DEBUG
 
-(defun ewb-new-output (objects registry outputs name version)
+(defun ewb-new-output (registry outputs name version)
   (cl-assert (eql version 4))
-  (let ((output (ewc-object-add :objects objects
+  (let ((output (ewc-object-add :objects (ewc-object-objects registry)
                                 :protocol 'wayland
                                 :interface 'wl-output))
         (id (1+ (length outputs))))
     (dolist (event '(geometry mode scale name description done))
       (setf (ewc-listener output event) (ewb-output-listener outputs id event)))
 
-    (ewc-request objects registry 'bind `((name . ,name)
-                                          (interface-len . ,(1+ (length "wl_output")))
-                                          (interface . "wl_output")
-                                          (version . 4)
-                                          (id . ,(ewc-object-id output))))))
+    (ewc-request registry 'bind `((name . ,name)
+                                  (interface-len . ,(1+ (length "wl_output")))
+                                  (interface . "wl_output")
+                                  (version . 4)
+                                  (id . ,(ewc-object-id output))))))
 ;; use mode for resolution
 
-(defun ewb-init-layout (objects registry name version)
+(defun ewb-init-layout (registry name version)
   (cl-assert (eql version 1))
-  (let ((layout (ewc-object-add :objects objects
+  (let ((layout (ewc-object-add :objects (ewc-object-objects registry)
                                 :protocol 'emacs-wayland-protocol
                                 :interface 'ewp-layout)))
     (setf (ewc-listener layout 'new-surface)
           #'ewb-new-surface)
-    (ewc-request objects registry 'bind `((name . ,name)
-                                          (interface-len . ,(1+ (length "ewp_layout")))
-                                          (interface . "ewp_layout")
-                                          (version . 1)
-                                          (id . ,(ewc-object-id layout))))))
+    (ewc-request registry 'bind `((name . ,name)
+                                  (interface-len . ,(1+ (length "ewp_layout")))
+                                  (interface . "ewp_layout")
+                                  (version . 1)
+                                  (id . ,(ewc-object-id layout))))))
 
 (defun ewb-new-surface (object args)
   (message "New surface: %s" args)
