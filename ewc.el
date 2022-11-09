@@ -51,6 +51,7 @@
 (require 'pcase)
 
 (require 'bindat)
+(require 'dom)
 
 ;;; Read wayland xml protocols
 ;; enums are not implemented
