@@ -159,7 +159,8 @@ This is the elisp version of wayland-scanner."
   (id nil :type integer :read-only t)
   (data nil :read-only nil)
   (events nil :type list :read-only t)
-  (requests nil :type list :read-only t))
+  (requests nil :type list :read-only t)
+  (objects nil :type ewc-objects :read-only t))
 ;; Add version?
 
 (cl-defstruct (ewc-objects (:constructor ewc-objects-make)
@@ -203,7 +204,8 @@ Use optional ID for server initiated objects.
                         :id id
                         :data data
                         :events events
-                        :requests requests)))
+                        :requests requests
+                        :objects objects)))
     (puthash id object (ewc-objects-table objects))
     (cl-incf (ewc-objects-new-id objects))
     object))
@@ -287,18 +289,11 @@ Returns a `ewc-objects' struct with wl-display as object 1."
             :filter (ewc-filter objects)))
     objects))
 
-(defun ewc-request (objects object request arguments)
-  "Issue REQUEST with ARGUMENTS of OBJECT
-OBJECT can be an `ewc-object' struct or an id.
-OBJECTS is an `ewc-objects' struct."
-  (process-send-string (ewc-object-data (ewc-object-get 1 objects))
-                       (ewc-pack
-                        (cond
-                         ((ewc-object-p object) object)
-                         ((natnump object) (ewc-object-get object objects))
-                         (t (error "Wrong object %s" object)))
-                        request
-                        arguments)))
+(defun ewc-request (object request arguments)
+  "Issue REQUEST with ARGUMENTS of OBJECT an `ewc-object'."
+  (process-send-string (ewc-object-data ; wl-display
+                        (ewc-object-get 1 (ewc-object-objects object)))
+                       (ewc-pack object request arguments)))
 
 ;; TODO: Add cleanup fn
 
@@ -314,7 +309,7 @@ OBJECTS is an `ewc-objects' struct."
             (push `(,name (interface . ,interface) (version . ,version))
                   (ewc-object-data object))))
     ;; Issue the request
-    (ewc-request objects 1 'get-registry `((registry . ,(ewc-object-id registry))))
+    (ewc-request (ewc-object-get 1 objects) 'get-registry `((registry . ,(ewc-object-id registry))))
     registry))
 
 (provide 'ewc)
