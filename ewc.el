@@ -311,6 +311,8 @@ Returns a `ewc-objects' struct with wl-display as object 1."
     ;; Issue the request
     (ewc-request (ewc-object-get 1 objects) 'get-registry `((registry . ,(ewc-object-id registry))))
     registry))
+;; TODO: Is ewc-get-registry used? 
+;; MAYBE: Abstract common pattern, see ewb.el, instead?
 
 (provide 'ewc)
 ;;; ewc.el ends here
