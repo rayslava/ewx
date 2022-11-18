@@ -22,6 +22,7 @@
 #include <wlr/types/wlr_seat.h>
 #include <wlr/types/wlr_subcompositor.h>
 #include <wlr/types/wlr_xcursor_manager.h>
+#include <wlr/types/wlr_xdg_output_v1.h>
 #include <wlr/types/wlr_xdg_shell.h>
 #include <wlr/types/wlr_xdg_decoration_v1.h>
 #include <wlr/types/wlr_server_decoration.h>
@@ -933,6 +934,10 @@ int main(int argc, char *argv[]) {
    */
   server.scene = wlr_scene_create();
   wlr_scene_attach_output_layout(server.scene, server.output_layout);
+
+  /* Create xdg_output_manager. This provides reliable x, y, height
+     and with per layout. */
+  wlr_xdg_output_manager_v1_create(server.wl_display, server.output_layout);
 
   /* Set up xdg-shell version 3. The xdg-shell is a Wayland protocol which is
    * used for application windows. For more detail on shells, refer to my
