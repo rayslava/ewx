@@ -21,6 +21,29 @@
 ;;                | floating
 ;;                | unmapped output -> map top | right | bottom | left
 
+;; 2nd take
+
+;; surface -> layout -> view
+
+;; different kind of surfaces:
+;;   1. emacs frame
+;;   2. wayland buffer
+;;   3. wayland widget 
+
+;; detect 1 and 3 by pid -> surface dispatch mechanism
+
+;; 1: triggered by new output -> make-frame & add layout function (frame parameter?)
+;;                 surface -> link with frame somehow? & layout fullscreen
+
+;; 2: default for new surface -> make-buffer & link with surface (buffer-local)
+
+;; Setup ewb buffer to create/delete/update view on show/hide/update
+
+;; Output size change -> relayout linked frame
+
+;; (window-body-pixel-edges)
+;; => (8 0 952 1150)
+
 ;;; Research:
 
 ;; (make-frame)
