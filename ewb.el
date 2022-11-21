@@ -97,9 +97,9 @@
          (registry (ewc-object-add :objects objects
                                    :protocol 'wayland
                                    :interface 'wl-registry))
-         xdg-output-manager
-         (outputs (list 'outputs)))
-    ;; Make a struct for above?
+         (outputs (ewb-outputs-make)))
+
+    (ewb-output-init)
     
     ;; Add global listener
     (setf (ewc-listener registry 'global)
@@ -108,23 +108,19 @@
             (message "Global %s %s %s" name interface version)
             (message "outputs %s" outputs)
             (pcase interface
-              ("zxdg_output_manager_v1" (setq xdg-output-manager
+              ("zxdg_output_manager_v1" (setf ewb-outputs-xdg-output-manager
                                               (ewb-output-xdg-manager registry name version)))
-              ("ewp_layout" (ewb-init-layout registry name version outputs))
-              ("wl_output" (ewb-output-new registry xdg-output-manager outputs name version)))))
+              ("wl_output" (push (ewb-output-new registry outputs name version)
+                                 (ewb-outputs-list outputs)))
+              ("ewp_layout" (ewb-init-layout registry name version outputs)))))
 
     (ewc-request (ewc-object-get 1 objects) 'get-registry `((registry . ,(ewc-object-id registry))))))
 
-(let ((o))
-  (setf (alist-get 1 o) nil)
-  (push 33 (setf (alist-get 2 o) (list 11)))
-  o)
-;; => ((2 11) (1))
+;;; Output & frame
+;; a global data for all outputs:
+;;   - xdg-output-manager
+;;   - list of outputs
 
-;; => nil
-
-
-;;; Outputs
 ;; wlroots has a output layout containing all outputs in one coordinate system.
 ;; wlr_output_layout_add(x,y) adds the output at x and y
 ;; wlr_output_layout_add_auto add the output to the right AND is used in ews.c
@@ -138,7 +134,15 @@
 ;;   -> do the offset calculation here for now
 ;;      and use a nice struct
 
-;; TODO: Use xdg_output output instead of wl_output!
+;; Idea: every output has a function/closure that takes the update and applies it
+;;       ie changes output data & resizes frame
+;;       who else needs access to output data? (something like list-outputs?)
+;;       how to provide it?
+
+(cl-defstruct (ewb-outputs (:constructor ewb-outputs-make)
+                           (:copier nil))
+  (xdg-output-manager nil :type ewc-object)
+  (list nil :type list))             ; list of ewb-output
 
 (cl-defstruct (ewb-output (:constructor ewb-output-make)
                           (:copier nil))
@@ -147,8 +151,18 @@
   (width 0 :type natnum :documentation "Output width")
   (height 0 :type natnum :documentation "Output height")
   (name nil :type string :documentation "Output name")
-  (description nil :type string :documentation "Output description"))
-;; Add frame slot?
+  (description nil :type string :documentation "Output description")
+  (frame nil :type frame :documentation "Linked frame")
+  (surface nil :type ewc-object :documentation "Surface of linked frame")
+  (view nil :type ewc-object :documentation "Current view of linked frame"))
+
+(defun ewb-output-update (output update)
+  "OUTPUT is ewb-output struct and UPDATE is alist"
+  (let ((slots '(x y width height name description)))
+    (cl-loop for i from 1 to (length slots)
+             for slot in slots
+             (setf (aref output i)
+                   (alist-get slot update)))))
 
 ;; TODO: Abstract; this is simple listener free version.
 (defun ewb-output-xdg-manager (registry name version)
@@ -163,22 +177,6 @@
                                   (id . ,(ewc-object-id xdg-output-manager))))
     xdg-output-manager))
 
-;; (defun ewb-output-update (outputs id update)
-;;   (pcase-let ((`(,output . ,dependends) (assoc id outputs #'eql)))
-;;     (while update
-;;       (pcase (pop update)
-;;         (`(name . ,name)
-;;          (setf (ewb-output-name output) name))
-;;         (`(description . ,description)
-;;          (setf (ewb-output-description output) description))))))
-
-;; Idea: every output has a function/closure that takes the update and applies it
-;;       ie changes output data & resizes frame
-;;       who else needs access to output data? (something like list-outputs?)
-;;       how to provide it?
-(defun ewb-output-update (output &rest updates)
-  )
-
 (let ((update))
   (defun ewb-output-listener (event)
     (pcase event
@@ -187,38 +185,73 @@
          (push values update)))
       ('done
        (lambda (object _values)
-         (cl-loop for (field . value) in update
-                  do (ewb-output-update (ewc-object-data object) field value))
-         (setq update nil)
-         (message "Updated outputs: %s" object)))))) ; DEBUG
+         (let ((update (apply #'nconc update)))
+           (message "Received update: %s" update) ; DEBUG
+           (ewb-output-update (ewc-object-data object) update)
+           LAYOUT if x y width height changed & there is surface)
+         (setq update nil))))))
 
-;; TODO: Should set listeners only once. Not for each new output.
-(defun ewb-output-new (registry xdg-output-manager outputs name version)
+;; Split in -init and -new to set listeners only once and not for each new output.
+(defun ewb-output-init ()
+  (setf (ewc-listener-global 'wayland 'wl-output 'done)
+        (ewb-output-listener 'done))
+  
+  (dolist (event '(logical-position logical-size name description))
+    (setf (ewc-listener-global 'xdg-output-unstable-v1 'zxdg-output-v1 event)
+          (ewb-output-listener event))))
+
+(defun ewb-output-XXX (output)
+  (lambda (surface app-id title pid)
+    (when (eql pid (emacs-pid))
+      (setf (ewb-output-surface output) surface)
+      LAYOUT if x y width height)))
+
+(defun ewb-output-new (registry outputs name version)
   (cl-assert (eql version 4))
-  (let ((output (ewc-object-add :objects (ewc-object-objects registry)
-                                :protocol 'wayland
-                                :interface 'wl-output
-                                :data (ewb-output-make))))
-    (push (ewc-object-id output) (cdr outputs))
-    (message "outputs %s" outputs)      ; DEBUG
 
-    (setf (ewc-listener output 'done) (ewb-output-listener 'done))
-    
-    (ewc-request registry 'bind `((name . ,name)
-                                  (interface-len . ,(1+ (length "wl_output")))
-                                  (interface . "wl_output")
-                                  (version . 4)
-                                  (id . ,(ewc-object-id output))))
+  (let ((output (ewb-output-make)))
 
-    (let ((xdg-output (ewc-object-add :objects (ewc-object-objects registry)
-                                      :protocol 'xdg-output-unstable-v1
-                                      :interface 'zxdg-output-v1)))
+    (add-onetime-hook 'ewb-surface-functions (ewb-output-XXX output))
 
-      (dolist (event '(logical-position logical-size name description))
-        (setf (ewc-listener xdg-output event) (ewb-output-listener event)))
-      
-      (ewc-request xdg-output-manager 'get-xdg-output `((id . ,(ewc-object-id xdg-output))
-                                                        (output . ,(ewc-object-id output)))))))
+    (setf (ewb-output-frame output)
+          ;;             TODO: Pass env var/ integrate
+          (make-frame '((display . "wayland-0"))))
+  
+
+    (let ((wl-output (ewc-object-add :objects (ewc-object-objects registry)
+                                     :protocol 'wayland
+                                     :interface 'wl-output
+                                     :data output)))
+
+      (ewc-request registry 'bind `((name . ,name)
+                                    (interface-len . ,(1+ (length "wl_output")))
+                                    (interface . "wl_output")
+                                    (version . 4)
+                                    (id . ,(ewc-object-id wl-output))))
+
+      (let ((xdg-output (ewc-object-add :objects (ewc-object-objects registry)
+                                        :protocol 'xdg-output-unstable-v1
+                                        :interface 'zxdg-output-v1)))
+
+
+
+        (ewc-request xdg-output-manager 'get-xdg-output `((id . ,(ewc-object-id xdg-output))
+                                                          (output . ,(ewc-object-id output)))))
+
+      output)))
+
+;; general layout function
+(ewc-request surface 'layout (id x y width height)) -> view
+
+;; frame needs layout function that handles x y offset
+;; (fn surface x y width height)
+
+;; LAYOUT
+;; on x y height width update
+;; if view
+;;   destroy view
+;; if surface
+;;   output-surface  x y width height 4ALL from ewb-output struct
 
 ;;; Layout
 (defun ewb-init-layout (registry name version outputs)
@@ -227,32 +260,54 @@
                                 :protocol 'emacs-wayland-protocol
                                 :interface 'ewp-layout)))
     (setf (ewc-listener layout 'new-surface)
-          #'ewb-new-surface)
+          #'ewb-surface-new)
     (ewc-request registry 'bind `((name . ,name)
                                   (interface-len . ,(1+ (length "ewp_layout")))
                                   (interface . "ewp_layout")
                                   (version . 1)
                                   (id . ,(ewc-object-id layout))))))
 
-(defun ewb-new-surface (object args)
+(defvar ewb-surface-functions (list #'ewb-buffer-new)
+  "Abnormal hook. Run if new surface requests a layout.
+Each function is passed surface app-id title pid as arguments
+The function should return nil if it does not handle this surface.")
+
+(defun ewb-surface-new (object args)
   (message "New surface: %s" args)
-  (pcase-let (((map id app_id title pid) args))
-    (ewc-object-add :objects objects
-                    :protocol 'emacs-wayland-protocol
-                    :interface 'ewp-surface
-                    :id id
-                    ;; :data app_id title pid ?
-                    )
-    ;; handle update-title and destroy events
+  (pcase-let (((map id ('app_id app-id) title pid) args))
+    ;; handle update-title and destroy events -> do it once in init
 
     ;; add buffer and link to surface
-    ))
+    (run-hook-with-args-until-success 'ewb-surface-functions
+                                      (ewc-object-add :objects objects
+                                                      :protocol 'emacs-wayland-protocol
+                                                      :interface 'ewp-surface
+                                                      :id id
+                                                      ;; :data ?
+                                                      )
+                                      app-id title pid)))
 
-;; NEXT:
+;;; Buffer
+(defvar-local ewb-buffer-surface nil)
+
+(defun ewb-buffer-new (surface _app-id title _pid)
+  (with-current-buffer (get-buffer-create (format "*X %s*" title))
+    (ewb-buffer-mode)
+    (setq ewb-buffer-surface surface)))
+
+;;; Helper
+(defun add-onetime-hook (hook function)
+  (letrec ((wrapper (lambda (&rest args)
+                      (let ((res (apply function args)))
+                        (when res
+                          (remove-hook hook wrapper))))))
+    (add-hook hook wrapper)))
+
+;;; NEXT:
 ;; - Rig up frame
 ;; - Rig up display of surface (= ewp-view)
 
-;; TODO:
+;;; TODO:
 ;; - Abstract common pattern: ewc-object-add -> objects & ewc-request with object-id in args
 
 (provide 'ewb)
