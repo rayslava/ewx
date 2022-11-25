@@ -303,7 +303,7 @@ Returns a `ewc-objects' struct with wl-display as object 1."
             :filter (ewc-filter objects)))
     objects))
 
-(defun ewc-request (object request arguments)
+(defun ewc-request (object request &optional arguments)
   "Issue REQUEST with ARGUMENTS of OBJECT an `ewc-object'."
   (process-send-string (ewc-object-data ; wl-display
                         (ewc-object-get 1 (ewc-object-objects object)))
