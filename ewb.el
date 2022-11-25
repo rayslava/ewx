@@ -98,17 +98,18 @@
                                    :protocol 'wayland
                                    :interface 'wl-registry))
          (outputs (ewb-outputs-make)))
-
-    (ewb-output-init)
+    ;; TODO: Move outputs to var? Less encapsulation is  more emacsy.
+    
+    (ewb-output-init objects)
     
     ;; Add global listener
     (setf (ewc-listener registry 'global)
-          (pcase-lambda (object (map name interface version))
+          (pcase-lambda (_object (map name interface version))
             ;; DEBUG
             (message "Global %s %s %s" name interface version)
-            (message "outputs %s" outputs)
+            ;; (message "outputs %s" outputs)
             (pcase interface
-              ("zxdg_output_manager_v1" (setf ewb-outputs-xdg-output-manager
+              ("zxdg_output_manager_v1" (setf (ewb-outputs-xdg-output-manager outputs)
                                               (ewb-output-xdg-manager registry name version)))
               ("wl_output" (push (ewb-output-new registry outputs name version)
                                  (ewb-outputs-list outputs)))
@@ -142,7 +143,7 @@
 (cl-defstruct (ewb-outputs (:constructor ewb-outputs-make)
                            (:copier nil))
   (xdg-output-manager nil :type ewc-object)
-  (list nil :type list))             ; list of ewb-output
+  (list nil :type list))             ; list of ewb-output TODO: Just have a list & keep xdg-output-manager seperate?
 
 (cl-defstruct (ewb-output (:constructor ewb-output-make)
                           (:copier nil))
@@ -155,14 +156,6 @@
   (frame nil :type frame :documentation "Linked frame")
   (surface nil :type ewc-object :documentation "Surface of linked frame")
   (view nil :type ewc-object :documentation "Current view of linked frame"))
-
-(defun ewb-output-update (output update)
-  "OUTPUT is ewb-output struct and UPDATE is alist"
-  (let ((slots '(x y width height name description)))
-    (cl-loop for i from 1 to (length slots)
-             for slot in slots
-             (setf (aref output i)
-                   (alist-get slot update)))))
 
 ;; TODO: Abstract; this is simple listener free version.
 (defun ewb-output-xdg-manager (registry name version)
@@ -187,31 +180,31 @@
        (lambda (object _values)
          (let ((update (apply #'nconc update)))
            (message "Received update: %s" update) ; DEBUG
-           (ewb-output-update (ewc-object-data object) update)
-           LAYOUT if x y width height changed & there is surface)
+           (ewb-output-update (ewc-object-data object) update))
          (setq update nil))))))
 
 ;; Split in -init and -new to set listeners only once and not for each new output.
-(defun ewb-output-init ()
-  (setf (ewc-listener-global 'wayland 'wl-output 'done)
+(defun ewb-output-init (objects)
+  (setf (ewc-listener-global objects 'wayland 'wl-output 'done)
         (ewb-output-listener 'done))
   
   (dolist (event '(logical-position logical-size name description))
-    (setf (ewc-listener-global 'xdg-output-unstable-v1 'zxdg-output-v1 event)
+    (setf (ewc-listener-global objects 'xdg-output-unstable-v1 'zxdg-output-v1 event)
           (ewb-output-listener event))))
 
-(defun ewb-output-XXX (output)
-  (lambda (surface app-id title pid)
+(defun ewb-output-init-surface (output)
+  (lambda (surface _app-id _title pid)
     (when (eql pid (emacs-pid))
       (setf (ewb-output-surface output) surface)
-      LAYOUT if x y width height)))
+      ;; Try to layout frame. Succeeds when x y width height are already set.
+      (ewb-output-layout-frame output))))
 
 (defun ewb-output-new (registry outputs name version)
   (cl-assert (eql version 4))
 
   (let ((output (ewb-output-make)))
 
-    (add-onetime-hook 'ewb-surface-functions (ewb-output-XXX output))
+    (add-onetime-hook 'ewb-surface-functions (ewb-output-init-surface output))
 
     (setf (ewb-output-frame output)
           ;;             TODO: Pass env var/ integrate
@@ -235,13 +228,11 @@
 
 
 
-        (ewc-request xdg-output-manager 'get-xdg-output `((id . ,(ewc-object-id xdg-output))
-                                                          (output . ,(ewc-object-id output)))))
+        (ewc-request (ewb-outputs-xdg-output-manager outputs)
+                     'get-xdg-output `((id . ,(ewc-object-id xdg-output))
+                                       (output . ,(ewc-object-id wl-output)))))
 
       output)))
-
-;; general layout function
-(ewc-request surface 'layout (id x y width height)) -> view
 
 ;; frame needs layout function that handles x y offset
 ;; (fn surface x y width height)
@@ -253,8 +244,56 @@
 ;; if surface
 ;;   output-surface  x y width height 4ALL from ewb-output struct
 
+;;   2 cases
+;;     ewb-output-init-surface   -> LAYOUT if x y width height
+;;     ewb-output-listener 'done -> LAYOUT if x | y | width | height changed & there is surface
+;;   + Set Frame parameter if x | y changed
+
+;; 1 layout frame surface on output
+(defun ewb-output-layout-frame (output)
+  "Returns nil if OUTPUT can not be layout out yet."
+  (pcase-let (((cl-struct ewb-output
+                          surface view
+                          x y width height)
+               output))
+
+    (when (and surface x y width height)
+      (when view
+        (ewc-request view 'destroy))
+  
+      (setf (ewb-output-view output)
+            (ewb-layout surface x y width height)))))
+
+;; 2 layout surface on output (with offset)
+(defun ewb-output-layout-surface (dx dy)
+  ;; ewb-layout-on-output ?
+  (lambda (surface x y width height)
+    (ewb-layout surface (+ x dx) (+ y dy) width height)))
+;; (setf (frame-parameter frame parameter) value)
+;; -> Set ewb-output-layout-surface as layout-surface frame-parameter
+
+(defun ewb-output-update (output update)
+  ;; Used in ewb-output-listener done
+  (pcase-let (((map x y width height name description) update))
+    ;; Update output struct
+    (when x (setf (ewb-output-x output) x))
+    (when y (setf (ewb-output-y output) y))
+    (when width (setf (ewb-output-width output) width))
+    (when height (setf (ewb-output-height output) height))
+    (when name (setf (ewb-output-name output) name))
+    (when description (setf (ewb-output-description output) description))
+    
+    ;; Update layout-surface function
+    (when (or x y)
+      (setf (frame-parameter (ewb-output-frame output) 'layout-surface)
+            (ewb-output-layout-surface x y)))
+
+    ;; Update output frame view
+    (when (or x y width height)
+      (ewb-output-layout-frame output))))
+
 ;;; Layout
-(defun ewb-init-layout (registry name version outputs)
+(defun ewb-init-layout (registry name version _outputs)
   (cl-assert (eql version 1))
   (let ((layout (ewc-object-add :objects (ewc-object-objects registry)
                                 :protocol 'emacs-wayland-protocol
@@ -279,13 +318,29 @@ The function should return nil if it does not handle this surface.")
 
     ;; add buffer and link to surface
     (run-hook-with-args-until-success 'ewb-surface-functions
-                                      (ewc-object-add :objects objects
+                                      (ewc-object-add :objects (ewc-object-objects object)
                                                       :protocol 'emacs-wayland-protocol
                                                       :interface 'ewp-surface
                                                       :id id
                                                       ;; :data ?
                                                       )
                                       app-id title pid)))
+
+;; general layout function
+(defun ewb-layout (surface x y width height)
+  "Layout SURFACE an ewc-object at X Y with WIDTH and HEIGHT.
+Returns a view ewc-object."
+  (cl-assert (and (ewc-object-p surface)
+                  (seq-every-p #'natnump (list x y width height))))
+
+  (let ((view (ewc-object-add :objects (ewc-object-objects surface)
+                              :protocol 'emacs-wayland-protocol
+                              :interface 'ewp-view)))
+    (ewc-request surface 'layout `((id ,(ewc-object-id view))
+                                   (x ,x) (y ,y)
+                                   (width ,width) (height ,height)))
+    view))
+
 
 ;;; Buffer
 (defvar-local ewb-buffer-surface nil)
