@@ -60,6 +60,7 @@
 
 ;;; Code:
 (require 'ewc)
+(require 'xdg)
 
 ;;; Helper
 (defun add-onetime-hook (hook function)

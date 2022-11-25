@@ -49,6 +49,7 @@
 (require 'seq)
 (require 'map)
 (require 'pcase)
+(require 'subr-x)
 
 (require 'bindat)
 (require 'dom)
@@ -72,7 +73,8 @@ read to those specified.
 
 This is the elisp version of wayland-scanner."
   ;; (protocol ...)
-  `(list ,@(mapcar #'ewc-read-protocol protocol)))
+  `(progn (defvar bindat-idx)
+          (list ,@(mapcar #'ewc-read-protocol protocol))))
 
 (defvar bindat-raw)
 (defvar bindat-idx)
