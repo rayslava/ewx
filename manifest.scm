@@ -3,6 +3,7 @@
 (use-modules (guix packages)
              (guix download)
              (guix git-download)
+             (gnu packages emacs)
              (gnu packages wm)
              (gnu packages xdisorg)
              (gnu packages freedesktop)
@@ -75,7 +76,8 @@
                            ;; enable x11 support
                            (append xcb-util-renderutil))))))
 
-(packages->manifest (list wlroots-next
+(packages->manifest (list emacs-next-pgtk
+                          wlroots-next
                           wayland-protocols
                           gnu-make
                           pkg-config
