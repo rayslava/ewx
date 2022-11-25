@@ -217,6 +217,20 @@ Use optional ID for server initiated objects.
   (inline-quote
    (cdr (alist-get ,event (ewc-object-events ,object)))))
 
+;; TMP testing in ewb for output
+;; cl-defmethod would be nicer, but how to combine with inline?
+(define-inline ewc-listener-global (objects protocol interface event)
+  "Return listener for EVENT of INTERFACE in PROTOCOL used in
+OBJECTS a ewc-objects struct."
+  (inline-quote
+   (thread-last
+     (ewc-objects-protocols ,objects)
+     (alist-get ,protocol)
+     (alist-get ,interface)
+     (nth 1)
+     (alist-get ,event)
+     (cdr))))
+
 ;;; Parse and print wayland wire messages
 (defvar ewc-msg-head
   (bindat-type (id uint 32 t)
