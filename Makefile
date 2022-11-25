@@ -1,3 +1,6 @@
+.POSIX:
+EMACS=emacs
+CC=gcc
 WAYLAND_PROTOCOLS=$(shell pkg-config --variable=pkgdatadir wayland-protocols)
 WAYLAND_SCANNER=$(shell pkg-config --variable=wayland_scanner wayland-scanner)
 LIBS=\
@@ -26,8 +29,21 @@ ews: ews.c ewp-protocol.c ewp-protocol.h xdg-shell-protocol.h
 		-o $@ $< $(word 2,$^) \
 		$(LIBS)
 
-clean:
-	rm -f ews xdg-shell-protocol.h xdg-shell-protocol.c ewp-protocol.h
+ewc.elc: ewc.el
+ewb.elc: ewb.el ewc.elc ewp.xml
+ewb-test.el: ewb.elc
 
-.DEFAULT_GOAL=ews
-.PHONY: clean
+compile: ewc.elc ewb.elc ews
+
+.SUFFIXES: .el .elc
+.el.elc:
+	$(EMACS) -Q --batch -L . -f batch-byte-compile $<
+
+check: ewb-test.el
+	$(EMACS) -Q -L . -l $<
+
+clean:
+	rm -f ewb.elc ewc.elc ews xdg-shell-protocol.h xdg-shell-protocol.c ewp-protocol.h
+
+.DEFAULT_GOAL=compile
+.PHONY: compile check clean
