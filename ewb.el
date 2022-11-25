@@ -61,61 +61,13 @@
 ;;; Code:
 (require 'ewc)
 
-;;; Init
-;; ewb-init with tmp names: ewb-1 -> ewb-2
-(defun ewb-1 ()
-  (let ((process-environment
-         (cons "WLR_X11_OUTPUTS=2"
-               ;; DEBUG
-               (cons "WAYLAND_DEBUG=1"
-                     process-environment))))
-    (make-process
-     :name "emacs-wayland-server"
-     :buffer "*emacs-wayland-server*"
-     :command (list (expand-file-name "./ews"))
-     :filter (lambda (proc str)
-               (with-current-buffer (process-buffer proc)
-                 (goto-char (point-max))
-                 (save-excursion (insert str))
-                 (when (re-search-forward (rx "WAYLAND_DISPLAY=" (group (+ (not control))))
-                                          nil t)
-                   (setf (process-filter proc) #'internal-default-process-filter)
-                   (ewb-2 (match-string 1))))))))
-
-;; set WAYLAND_DISPLAY inside emacs instead of arg
-(defun ewb-2 (socket)
-  (let* ((objects (ewc-connect
-                   (ewc-read ("~/s/wayland/ref/wayland/protocol/wayland.xml"
-                              wl-display wl-registry wl-output)
-                             ;; TODO: Use pkg-config?
-                             ;;   pkg-config --variable=pkgdatadir wayland-protocols
-                             ("/gnu/store/4xinswliqgki9sxkffh1gg4fdymca0ph-wayland-protocols-1.26/share/wayland-protocols/unstable/xdg-output/xdg-output-unstable-v1.xml"
-                              zxdg-output-manager-v1 zxdg-output-v1) ; = all interfaces
-                             ("ewp.xml"
-                              ewp-layout ewp-surface ewp-view))
-                   (expand-file-name socket (xdg-runtime-dir))))
-         (registry (ewc-object-add :objects objects
-                                   :protocol 'wayland
-                                   :interface 'wl-registry))
-         (outputs (ewb-outputs-make)))
-    ;; TODO: Move outputs to var? Less encapsulation is  more emacsy.
-    
-    (ewb-output-init objects)
-    
-    ;; Add global listener
-    (setf (ewc-listener registry 'global)
-          (pcase-lambda (_object (map name interface version))
-            ;; DEBUG
-            (message "Global %s %s %s" name interface version)
-            ;; (message "outputs %s" outputs)
-            (pcase interface
-              ("zxdg_output_manager_v1" (setf (ewb-outputs-xdg-output-manager outputs)
-                                              (ewb-output-xdg-manager registry name version)))
-              ("wl_output" (push (ewb-output-new registry outputs name version)
-                                 (ewb-outputs-list outputs)))
-              ("ewp_layout" (ewb-init-layout registry name version outputs)))))
-
-    (ewc-request (ewc-object-get 1 objects) 'get-registry `((registry . ,(ewc-object-id registry))))))
+;;; Helper
+(defun add-onetime-hook (hook function)
+  (letrec ((wrapper (lambda (&rest args)
+                      (let ((res (apply function args)))
+                        (when res
+                          (remove-hook hook wrapper))))))
+    (add-hook hook wrapper)))
 
 ;;; Output & frame
 ;; a global data for all outputs:
@@ -350,13 +302,61 @@ Returns a view ewc-object."
     (ewb-buffer-mode)
     (setq ewb-buffer-surface surface)))
 
-;;; Helper
-(defun add-onetime-hook (hook function)
-  (letrec ((wrapper (lambda (&rest args)
-                      (let ((res (apply function args)))
-                        (when res
-                          (remove-hook hook wrapper))))))
-    (add-hook hook wrapper)))
+;;; Init
+;; ewb-init with tmp names: ewb-1 -> ewb-2
+(defun ewb-1 ()
+  (let ((process-environment
+         (cons "WLR_X11_OUTPUTS=2"
+               ;; DEBUG
+               (cons "WAYLAND_DEBUG=1"
+                     process-environment))))
+    (make-process
+     :name "emacs-wayland-server"
+     :buffer "*emacs-wayland-server*"
+     :command (list (expand-file-name "./ews"))
+     :filter (lambda (proc str)
+               (with-current-buffer (process-buffer proc)
+                 (goto-char (point-max))
+                 (save-excursion (insert str))
+                 (when (re-search-forward (rx "WAYLAND_DISPLAY=" (group (+ (not control))))
+                                          nil t)
+                   (setf (process-filter proc) #'internal-default-process-filter)
+                   (ewb-2 (match-string 1))))))))
+
+;; set WAYLAND_DISPLAY inside emacs instead of arg
+(defun ewb-2 (socket)
+  (let* ((objects (ewc-connect
+                   (ewc-read ("~/s/wayland/ref/wayland/protocol/wayland.xml"
+                              wl-display wl-registry wl-output)
+                             ;; TODO: Use pkg-config?
+                             ;;   pkg-config --variable=pkgdatadir wayland-protocols
+                             ("/gnu/store/4xinswliqgki9sxkffh1gg4fdymca0ph-wayland-protocols-1.26/share/wayland-protocols/unstable/xdg-output/xdg-output-unstable-v1.xml"
+                              zxdg-output-manager-v1 zxdg-output-v1) ; = all interfaces
+                             ("ewp.xml"
+                              ewp-layout ewp-surface ewp-view))
+                   (expand-file-name socket (xdg-runtime-dir))))
+         (registry (ewc-object-add :objects objects
+                                   :protocol 'wayland
+                                   :interface 'wl-registry))
+         (outputs (ewb-outputs-make)))
+    ;; TODO: Move outputs to var? Less encapsulation is  more emacsy.
+    
+    (ewb-output-init objects)
+    
+    ;; Add global listener
+    (setf (ewc-listener registry 'global)
+          (pcase-lambda (_object (map name interface version))
+            ;; DEBUG
+            (message "Global %s %s %s" name interface version)
+            ;; (message "outputs %s" outputs)
+            (pcase interface
+              ("zxdg_output_manager_v1" (setf (ewb-outputs-xdg-output-manager outputs)
+                                              (ewb-output-xdg-manager registry name version)))
+              ("wl_output" (push (ewb-output-new registry outputs name version)
+                                 (ewb-outputs-list outputs)))
+              ("ewp_layout" (ewb-init-layout registry name version outputs)))))
+
+    (ewc-request (ewc-object-get 1 objects) 'get-registry `((registry . ,(ewc-object-id registry))))))
 
 ;;; NEXT:
 ;; - Rig up frame
