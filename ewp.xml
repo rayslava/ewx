@@ -91,6 +91,17 @@
       If a ewp_surface is layed out an ewp_view is created. This is its interface.
     </description>
 
+    <request name="layout">
+      <description summary="Layout view">
+        Updata views layout by setting its x and y position and its width and height size.
+        Shows the view at x and y of its parent with width and height.
+      </description>
+      <arg name="x" type="uint" summary="x coordinate of window origin"/>
+      <arg name="y" type="uint" summary="y coordinate of window origin"/>
+      <arg name="width" type="uint" summary="width of window"/>
+      <arg name="height" type="uint" summary="height of window"/>
+    </request>
+
     <request name="destroy" type="destructor">
       <description summary="destroy the view">
         Request destruction of the view. This deletes the ewp_view
