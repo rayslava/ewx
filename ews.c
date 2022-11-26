@@ -41,7 +41,7 @@ struct ews_server {
 
   struct wlr_xdg_shell *xdg_shell;
   struct wl_listener new_xdg_surface;
-  struct wl_list views;
+  struct wl_list surfaces;
 
   struct wlr_cursor *cursor;
   struct wlr_xcursor_manager *cursor_mgr;
@@ -72,17 +72,27 @@ struct ews_output {
   struct wl_listener destroy;
 };
 
-struct ews_view {
+/* A ews_surface is a ~ xdg_toplevel.
+   Maybe other name? But name is in protocol and elisp too already.
+   Keep. Is a fitting name.*/
+struct ews_surface {
   struct wl_list link;
   struct ews_server *server;
   struct wlr_xdg_toplevel *xdg_toplevel;
-  struct wlr_scene_tree *scene_tree;
+  struct wl_list views;
+  int width, height;
   struct wl_listener map;
   struct wl_listener unmap;
   struct wl_listener destroy;
   struct wl_listener request_maximize;
   struct wl_listener request_fullscreen;
-  int x, y;
+};
+
+struct ews_view {
+  struct wl_list link;
+  struct ews_surface *surface;
+  struct wlr_scene_tree *scene_tree;
+  int x, y, width, height;
 };
 
 struct ews_keyboard {
@@ -95,12 +105,12 @@ struct ews_keyboard {
   struct wl_listener destroy;
 };
 
-static void focus_view(struct ews_view *view, struct wlr_surface *surface) {
+static void focus_surface(struct ews_surface *ews_surface, struct wlr_surface *surface) {
   /* Note: this function only deals with keyboard focus. */
-  if (view == NULL) {
+  if (ews_surface == NULL) {
     return;
   }
-  struct ews_server *server = view->server;
+  struct ews_server *server = ews_surface->server;
   struct wlr_seat *seat = server->seat;
   struct wlr_surface *prev_surface = seat->keyboard_state.focused_surface;
   if (prev_surface == surface) {
@@ -119,19 +129,15 @@ static void focus_view(struct ews_view *view, struct wlr_surface *surface) {
     wlr_xdg_toplevel_set_activated(previous->toplevel, false);
   }
   struct wlr_keyboard *keyboard = wlr_seat_get_keyboard(seat);
-  /* Move the view to the front */
-  wlr_scene_node_raise_to_top(&view->scene_tree->node);
-  wl_list_remove(&view->link);
-  wl_list_insert(&server->views, &view->link);
   /* Activate the new surface */
-  wlr_xdg_toplevel_set_activated(view->xdg_toplevel, true);
+  wlr_xdg_toplevel_set_activated(ews_surface->xdg_toplevel, true);
   /*
    * Tell the seat to have the keyboard enter this surface. wlroots will keep
    * track of this and automatically send key events to the appropriate
    * clients without additional work on your part.
    */
   if (keyboard != NULL) {
-    wlr_seat_keyboard_notify_enter(seat, view->xdg_toplevel->base->surface,
+    wlr_seat_keyboard_notify_enter(seat, ews_surface->xdg_toplevel->base->surface,
                                    keyboard->keycodes, keyboard->num_keycodes, &keyboard->modifiers);
   }
 }
@@ -282,11 +288,11 @@ static void seat_request_set_selection(struct wl_listener *listener, void *data)
   wlr_seat_set_selection(server->seat, event->source, event->serial);
 }
 
-static struct ews_view *desktop_view_at(struct ews_server *server, double lx, double ly,
-                                        struct wlr_surface **surface, double *sx, double *sy) {
+static struct ews_surface *surface_at(struct ews_server *server, double lx, double ly,
+                                      struct wlr_surface **surface, double *sx, double *sy) {
   /* This returns the topmost node in the scene at the given layout coords.
    * we only care about surface nodes as we are specifically looking for a
-   * surface in the surface tree of a ews_view. */
+   * surface in the surface tree of a ews_surface. */
   struct wlr_scene_node *node = wlr_scene_node_at(
                                                   &server->scene->tree.node, lx, ly, sx, sy);
   if (node == NULL || node->type != WLR_SCENE_NODE_BUFFER) {
@@ -300,7 +306,7 @@ static struct ews_view *desktop_view_at(struct ews_server *server, double lx, do
   }
 
   *surface = scene_surface->surface;
-  /* Find the node corresponding to the ews_view at the root of this
+  /* Find the node corresponding to the ews_surface at the root of this
    * surface tree, it is the only one for which we set the data field. */
   struct wlr_scene_tree *tree = node->parent;
   while (tree != NULL && tree->node.data == NULL) {
@@ -314,9 +320,9 @@ static void process_cursor_motion(struct ews_server *server, uint32_t time) {
   double sx, sy;
   struct wlr_seat *seat = server->seat;
   struct wlr_surface *surface = NULL;
-  struct ews_view *view = desktop_view_at(server,
-                                             server->cursor->x, server->cursor->y, &surface, &sx, &sy);
-  if (!view) {
+  struct ews_surface *ews_surface = surface_at(server,
+                                               server->cursor->x, server->cursor->y, &surface, &sx, &sy);
+  if (!surface) {
     /* If there's no view under the cursor, set the cursor image to a
      * default. This is what makes the cursor image appear when you move it
      * around the screen, not over any views. */
@@ -387,11 +393,11 @@ static void server_cursor_button(struct wl_listener *listener, void *data) {
                                  event->time_msec, event->button, event->state);
   double sx, sy;
   struct wlr_surface *surface = NULL;
-  struct ews_view *view = desktop_view_at(server,
-                                             server->cursor->x, server->cursor->y, &surface, &sx, &sy);
+  struct ews_surface *ews_surface = surface_at(server,
+                                              server->cursor->x, server->cursor->y, &surface, &sx, &sy);
   if (event->state == WLR_BUTTON_PRESSED) {
     /* Focus client where button was _pressed_ */
-    focus_view(view, surface);
+    focus_surface(ews_surface, surface);
   }
 }
 
@@ -497,79 +503,130 @@ static void server_new_output(struct wl_listener *listener, void *data) {
 
 static void xdg_toplevel_map(struct wl_listener *listener, void *data) {
   /* Called when the surface is mapped, or ready to display on-screen. */
-  struct ews_view *view = wl_container_of(listener, view, map);
+  struct ews_surface *surface = wl_container_of(listener, surface, map);
   
   wlr_log(WLR_ERROR, "Attention: Someone called xdg_toplevel_map");
 }
 
 static void xdg_toplevel_unmap(struct wl_listener *listener, void *data) {
   /* Called when the surface is unmapped, and should no longer be shown. */
-  struct ews_view *view = wl_container_of(listener, view, unmap);
+  struct ews_surface *surface = wl_container_of(listener, surface, unmap);
   
   wlr_log(WLR_ERROR, "Attention: Someone called xdg_toplevel_unmap");
 }
 
-static void xdg_toplevel_destroy(struct wl_listener *listener, void *data) {
-  /* Called when the surface is destroyed and should never be shown again. */
-  struct ews_view *view = wl_container_of(listener, view, destroy);
+static void ewp_surface_destroy(struct ews_surface *surface) {
+  /* TODO: ewp_surface destroy event */
 
-  wl_list_remove(&view->map.link);
-  wl_list_remove(&view->unmap.link);
-  wl_list_remove(&view->destroy.link);
-  wl_list_remove(&view->request_maximize.link);
-  wl_list_remove(&view->request_fullscreen.link);
+  wl_list_remove(&surface->map.link);
+  wl_list_remove(&surface->unmap.link);
+  wl_list_remove(&surface->destroy.link);
+  wl_list_remove(&surface->request_maximize.link);
+  wl_list_remove(&surface->request_fullscreen.link);
 
-  free(view);
+  free(surface);
 }
 
-static void xdg_toplevel_request_maximize(
-                                          struct wl_listener *listener, void *data) {
+static void ewp_surface_handle_destroy(struct wl_resource *resource) {
+  struct ews_surface *surface = wl_resource_get_user_data(resource);
+  ewp_surface_destroy(surface);
+}
+
+static void xdg_toplevel_destroy(struct wl_listener *listener, void *data) {
+  /* Called when the surface is destroyed and should never be shown again. */
+  struct ews_surface *surface = wl_container_of(listener, surface, destroy);
+  ewp_surface_destroy(surface);
+}
+
+static void xdg_toplevel_request_maximize(struct wl_listener *listener, void *data) {
   /* This event is raised when a client would like to maximize itself,
    * typically because the user clicked on the maximize button on
    * client-side decorations. ews doesn't support maximization, but
    * to conform to xdg-shell protocol we still must send a configure.
    * wlr_xdg_surface_schedule_configure() is used to send an empty reply. */
-  struct ews_view *view =
-    wl_container_of(listener, view, request_maximize);
-  wlr_xdg_surface_schedule_configure(view->xdg_toplevel->base);
+  struct ews_surface *surface =
+    wl_container_of(listener, surface, request_maximize);
+  wlr_xdg_surface_schedule_configure(surface->xdg_toplevel->base);
 }
 
-static void xdg_toplevel_request_fullscreen(
-                                            struct wl_listener *listener, void *data) {
+static void xdg_toplevel_request_fullscreen(struct wl_listener *listener, void *data) {
   /* Just as with request_maximize, we must send a configure here. */
-  struct ews_view *view =
-    wl_container_of(listener, view, request_fullscreen);
-  wlr_xdg_surface_schedule_configure(view->xdg_toplevel->base);
+  struct ews_surface *surface =
+    wl_container_of(listener, surface, request_fullscreen);
+  wlr_xdg_surface_schedule_configure(surface->xdg_toplevel->base);
 }
 
-static void map(struct ews_view *view) {
-  view->scene_tree = wlr_scene_xdg_surface_create(&view->server->scene->tree,
-                                                  view->xdg_toplevel->base);
-
-  wl_list_insert(&view->server->views, &view->link);
-
-  /* focus_view(view, view->xdg_toplevel->base->surface); */
-  /* Set focus (of seat)? */
+static void layout(struct ews_view *view) {
+  if (view->width + view->height > view->surface->width + view->surface->height) {
+    view->surface->width = view->width;
+    view->surface->height = view->height;
+    wlr_xdg_toplevel_set_size(view->surface->xdg_toplevel, view->width, view->height);
+  }
+  wlr_scene_buffer_set_dest_size(wlr_scene_buffer_from_node(&view->scene_tree->node),
+                                 view->width, view->height);
+  wlr_scene_node_set_position(&view->scene_tree->node, view->x, view->y);
 }
 
-static void unmap(struct ews_view *view) {
+static void ewp_view_handle_layout(struct wl_client *client, struct wl_resource *resource,
+                                   uint32_t x, uint32_t y,
+                                   uint32_t width, uint32_t height) {
+  struct ews_view *view = wl_resource_get_user_data(resource);
+  view->x = x;
+  view->y = y;
+  view->width = width;
+  view->height = height;
+  layout(view);
+}
+
+static void ewp_view_destroy(struct wl_resource *resource) {
+  struct ews_view *view = wl_resource_get_user_data(resource);
   wl_list_remove(&view->link);
   
   wlr_scene_node_destroy(&view->scene_tree->node);
+
+  free(view);
 }
 
-static void layout(struct ews_view *view, uint32_t x, uint32_t y, uint32_t width, uint32_t height) {
-  wlr_scene_node_set_position(&view->scene_tree->node, x, y);
-  wlr_xdg_toplevel_set_size(view->xdg_toplevel, width, height);
+static void ewp_view_handle_destroy(struct wl_client *client, struct wl_resource *resource) {
+  wl_resource_destroy(resource);
 }
 
-static void
-ewp_surface_handle_layout(struct wl_client *client, struct wl_resource *resource,
-                          uint32_t id, uint32_t x, uint32_t y, uint32_t width, uint32_t height) {
+static const struct ewp_view_interface
+ewp_view_implementation = {
+  .layout = ewp_view_handle_layout,
+  .destroy = ewp_view_handle_destroy,
+};
+
+static void ewp_surface_handle_layout(struct wl_client *client, struct wl_resource *resource,
+                                      uint32_t id,
+                                      uint32_t x, uint32_t y,
+                                      uint32_t width, uint32_t height) {
   /* TODO: Integrate with xdg_toplevel_map; make map atomic = show on layout or map */
-  struct ews_view *view = wl_resource_get_user_data(resource);
-  /* view->scene_tree = wlr_scene_xdg_surface_create */
-  layout(view, x, y, width, height);
+  struct ews_surface *surface = wl_resource_get_user_data(resource);
+
+  /* Allocate a ews_view */
+  struct ews_view *view =
+    calloc(1, sizeof(struct ews_view));
+  view->surface = surface;
+  wl_list_insert(&surface->views, &view->link);
+  view->scene_tree = wlr_scene_xdg_surface_create(&surface->server->scene->tree,
+                                                  surface->xdg_toplevel->base);
+  /* For surface_at */
+  view->scene_tree->node.data = surface;
+  
+  view->x = x;
+  view->y = y;
+  view->width = width;
+  view->height = height;
+  layout(view);
+
+  /* Create an ewp_view */
+  struct wl_resource *view_resource = wl_resource_create(client, &ewp_view_interface, 1, id);
+  wl_resource_set_implementation(view_resource, &ewp_view_implementation,
+                                 view, ewp_view_destroy);
+  
+  /* focus_surface(ews_surface, surface->xdg_toplevel->base->surface); */
+  /* = Set focus (of seat)? */
 }
 
 static const struct ewp_surface_interface
@@ -612,19 +669,18 @@ static void server_new_xdg_surface(struct wl_listener *listener, void *data) {
 
   assert(xdg_surface->role == WLR_XDG_SURFACE_ROLE_TOPLEVEL);
 
-  /* Allocate a ews_view for this surface */
-  struct ews_view *view =
-    calloc(1, sizeof(struct ews_view));
-  view->server = server;
-  view->xdg_toplevel = xdg_surface->toplevel;
-  /* view->scene_tree = wlr_scene_xdg_surface_create(&view->server->scene->tree, view->xdg_toplevel->base); */
-  /* view->scene_tree->node.data = view; */
-  /* xdg_surface->data = view->scene_tree; */
+  /* Allocate a ews_surface for this surface */
+  struct ews_surface *surface =
+    calloc(1, sizeof(struct ews_surface));
+  surface->server = server;
+  surface->xdg_toplevel = xdg_surface->toplevel;
+  wl_list_init(&surface->views);
 
   /* Create an ewp_surface */
   struct wl_client *client = wl_resource_get_client(server->layout_resource);
   struct wl_resource *resource = wl_resource_create(client, &ewp_surface_interface, 1, 0);
-  wl_resource_set_implementation(resource, &ewp_surface_implementation, view, 0);
+  wl_resource_set_implementation(resource, &ewp_surface_implementation,
+                                 surface, ewp_surface_handle_destroy);
 
   pid_t pid;
   wl_client_get_credentials(xdg_surface->client->client, &pid, 0, 0);
@@ -637,21 +693,21 @@ static void server_new_xdg_surface(struct wl_listener *listener, void *data) {
                               pid);
 
   /* Listen to the various events it can emit */
-  view->map.notify = xdg_toplevel_map;
-  wl_signal_add(&xdg_surface->events.map, &view->map);
-  view->unmap.notify = xdg_toplevel_unmap;
-  wl_signal_add(&xdg_surface->events.unmap, &view->unmap);
-  view->destroy.notify = xdg_toplevel_destroy;
-  wl_signal_add(&xdg_surface->events.destroy, &view->destroy);
+  surface->map.notify = xdg_toplevel_map;
+  wl_signal_add(&xdg_surface->events.map, &surface->map);
+  surface->unmap.notify = xdg_toplevel_unmap;
+  wl_signal_add(&xdg_surface->events.unmap, &surface->unmap);
+  surface->destroy.notify = xdg_toplevel_destroy;
+  wl_signal_add(&xdg_surface->events.destroy, &surface->destroy);
 
   /* cotd */
   struct wlr_xdg_toplevel *toplevel = xdg_surface->toplevel;
-  view->request_maximize.notify = xdg_toplevel_request_maximize;
+  surface->request_maximize.notify = xdg_toplevel_request_maximize;
   wl_signal_add(&toplevel->events.request_maximize,
-                &view->request_maximize);
-  view->request_fullscreen.notify = xdg_toplevel_request_fullscreen;
+                &surface->request_maximize);
+  surface->request_fullscreen.notify = xdg_toplevel_request_fullscreen;
   wl_signal_add(&toplevel->events.request_fullscreen,
-                &view->request_fullscreen);
+                &surface->request_fullscreen);
 }
 
 /* emacs wayland protocol */
@@ -796,7 +852,7 @@ int main(int argc, char *argv[]) {
    *
    * https://drewdevault.com/2018/07/29/Wayland-shells.html
    */
-  wl_list_init(&server.views); /* XXXX: List only needed for cycling */
+  wl_list_init(&server.surfaces);
   server.xdg_shell = wlr_xdg_shell_create(server.wl_display, 3);
   server.new_xdg_surface.notify = server_new_xdg_surface;
   wl_signal_add(&server.xdg_shell->events.new_surface,
