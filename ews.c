@@ -154,33 +154,6 @@ static void keyboard_handle_modifiers(
                                      &keyboard->wlr_keyboard->modifiers);
 }
 
-static bool handle_keybinding(struct ews_server *server, xkb_keysym_t sym) {
-  /*
-   * Here we handle compositor keybindings. This is when the compositor is
-   * processing keys, rather than passing them on to the client for its own
-   * processing.
-   *
-   * This function assumes Alt is held down.
-   */
-  switch (sym) {
-  case XKB_KEY_Escape:
-    wl_display_terminate(server->wl_display);
-    break;
-  case XKB_KEY_F1:
-    /* Cycle to the next view */
-    if (wl_list_length(&server->views) < 2) {
-      break;
-    }
-    struct ews_view *next_view = wl_container_of(
-                                                    server->views.prev, next_view, link);
-    focus_view(next_view, next_view->xdg_toplevel->base->surface);
-    break;
-  default:
-    return false;
-  }
-  return true;
-}
-
 static void keyboard_handle_key(
                                 struct wl_listener *listener, void *data) {
   /* This event is raised when a key is pressed or released. */
@@ -190,30 +163,10 @@ static void keyboard_handle_key(
   struct wlr_keyboard_key_event *event = data;
   struct wlr_seat *seat = server->seat;
 
-  /* Translate libinput keycode -> xkbcommon */
-  uint32_t keycode = event->keycode + 8;
-  /* Get a list of keysyms based on the keymap for this keyboard */
-  const xkb_keysym_t *syms;
-  int nsyms = xkb_state_key_get_syms(
-                                     keyboard->wlr_keyboard->xkb_state, keycode, &syms);
-
-  bool handled = false;
-  uint32_t modifiers = wlr_keyboard_get_modifiers(keyboard->wlr_keyboard);
-  if ((modifiers & WLR_MODIFIER_ALT) &&
-      event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
-    /* If alt is held down and this button was _pressed_, we attempt to
-     * process it as a compositor keybinding. */
-    for (int i = 0; i < nsyms; i++) {
-      handled = handle_keybinding(server, syms[i]);
-    }
-  }
-
-  if (!handled) {
-    /* Otherwise, we pass it along to the client. */
-    wlr_seat_set_keyboard(seat, keyboard->wlr_keyboard);
-    wlr_seat_keyboard_notify_key(seat, event->time_msec,
-                                 event->keycode, event->state);
-  }
+  /* Pass it along to the client. */
+  wlr_seat_set_keyboard(seat, keyboard->wlr_keyboard);
+  wlr_seat_keyboard_notify_key(seat, event->time_msec,
+                               event->keycode, event->state);
 }
 
 static void keyboard_handle_destroy(struct wl_listener *listener, void *data) {
