@@ -717,10 +717,11 @@ ewp_surface_handle_layout(struct wl_client *client, struct wl_resource *resource
                           uint32_t id, uint32_t x, uint32_t y, uint32_t width, uint32_t height) {
   /* TODO: Integrate with xdg_toplevel_map; make map atomic = show on layout or map */
   struct ews_view *view = wl_resource_get_user_data(resource);
+  /* view->scene_tree = wlr_scene_xdg_surface_create */
   wlr_scene_node_set_position(&view->scene_tree->node, x, y);
   wlr_xdg_toplevel_set_size(view->xdg_toplevel, width, height);
 }
-/* TODO: This is so last ewp.xml! */
+
 static const struct ewp_surface_interface
 ewp_surface_implementation = {
   .layout = ewp_surface_handle_layout,
