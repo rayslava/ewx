@@ -629,22 +629,14 @@ static void xdg_toplevel_map(struct wl_listener *listener, void *data) {
   /* Called when the surface is mapped, or ready to display on-screen. */
   struct ews_view *view = wl_container_of(listener, view, map);
   
-  view->scene_tree = wlr_scene_xdg_surface_create(&view->server->scene->tree,
-                                                  view->xdg_toplevel->base);
-
-  wl_list_insert(&view->server->views, &view->link);
-
-  /* focus_view(view, view->xdg_toplevel->base->surface); */
-  /* Set focus (of seat)? */
+  wlr_log(WLR_ERROR, "Attention: Someone called xdg_toplevel_map");
 }
 
 static void xdg_toplevel_unmap(struct wl_listener *listener, void *data) {
   /* Called when the surface is unmapped, and should no longer be shown. */
   struct ews_view *view = wl_container_of(listener, view, unmap);
-
-  wl_list_remove(&view->link);
   
-  wlr_scene_node_destroy(&view->scene_tree->node);
+  wlr_log(WLR_ERROR, "Attention: Someone called xdg_toplevel_unmap");
 }
 
 static void xdg_toplevel_destroy(struct wl_listener *listener, void *data) {
@@ -717,6 +709,23 @@ static void xdg_toplevel_request_fullscreen(
     wl_container_of(listener, view, request_fullscreen);
   wlr_xdg_surface_schedule_configure(view->xdg_toplevel->base);
 }
+
+static void map(struct ews_view *view) {
+  view->scene_tree = wlr_scene_xdg_surface_create(&view->server->scene->tree,
+                                                  view->xdg_toplevel->base);
+
+  wl_list_insert(&view->server->views, &view->link);
+
+  /* focus_view(view, view->xdg_toplevel->base->surface); */
+  /* Set focus (of seat)? */
+}
+
+static void unmap(struct ews_view *view) {
+  wl_list_remove(&view->link);
+  
+  wlr_scene_node_destroy(&view->scene_tree->node);
+}
+
 
 static void
 ewp_surface_handle_layout(struct wl_client *client, struct wl_resource *resource,
