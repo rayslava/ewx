@@ -726,6 +726,10 @@ static void unmap(struct ews_view *view) {
   wlr_scene_node_destroy(&view->scene_tree->node);
 }
 
+static void layout(struct ews_view *view, uint32_t x, uint32_t y, uint32_t width, uint32_t height) {
+  wlr_scene_node_set_position(&view->scene_tree->node, x, y);
+  wlr_xdg_toplevel_set_size(view->xdg_toplevel, width, height);
+}
 
 static void
 ewp_surface_handle_layout(struct wl_client *client, struct wl_resource *resource,
@@ -733,8 +737,7 @@ ewp_surface_handle_layout(struct wl_client *client, struct wl_resource *resource
   /* TODO: Integrate with xdg_toplevel_map; make map atomic = show on layout or map */
   struct ews_view *view = wl_resource_get_user_data(resource);
   /* view->scene_tree = wlr_scene_xdg_surface_create */
-  wlr_scene_node_set_position(&view->scene_tree->node, x, y);
-  wlr_xdg_toplevel_set_size(view->xdg_toplevel, width, height);
+  layout(view, x, y, width, height);
 }
 
 static const struct ewp_surface_interface
