@@ -628,10 +628,14 @@ static void server_new_output(struct wl_listener *listener, void *data) {
 static void xdg_toplevel_map(struct wl_listener *listener, void *data) {
   /* Called when the surface is mapped, or ready to display on-screen. */
   struct ews_view *view = wl_container_of(listener, view, map);
+  
+  view->scene_tree = wlr_scene_xdg_surface_create(&view->server->scene->tree,
+                                                  view->xdg_toplevel->base);
 
   wl_list_insert(&view->server->views, &view->link);
 
-  focus_view(view, view->xdg_toplevel->base->surface);
+  /* focus_view(view, view->xdg_toplevel->base->surface); */
+  /* Set focus (of seat)? */
 }
 
 static void xdg_toplevel_unmap(struct wl_listener *listener, void *data) {
@@ -639,6 +643,8 @@ static void xdg_toplevel_unmap(struct wl_listener *listener, void *data) {
   struct ews_view *view = wl_container_of(listener, view, unmap);
 
   wl_list_remove(&view->link);
+  
+  wlr_scene_node_destroy(&view->scene_tree->node);
 }
 
 static void xdg_toplevel_destroy(struct wl_listener *listener, void *data) {
@@ -767,9 +773,9 @@ static void server_new_xdg_surface(struct wl_listener *listener, void *data) {
     calloc(1, sizeof(struct ews_view));
   view->server = server;
   view->xdg_toplevel = xdg_surface->toplevel;
-  view->scene_tree = wlr_scene_xdg_surface_create(&view->server->scene->tree, view->xdg_toplevel->base);
-  view->scene_tree->node.data = view;
-  xdg_surface->data = view->scene_tree;
+  /* view->scene_tree = wlr_scene_xdg_surface_create(&view->server->scene->tree, view->xdg_toplevel->base); */
+  /* view->scene_tree->node.data = view; */
+  /* xdg_surface->data = view->scene_tree; */
 
   /* Create an ewp_surface */
   struct wl_client *client = wl_resource_get_client(server->layout_resource);
