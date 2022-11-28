@@ -1,3 +1,4 @@
+*.elc
 *-protocol.h
 *-protocol.c
 ews
