@@ -252,3 +252,109 @@ mpv --profile=low-latency --untimed /dev/video0
 
 * OK it's here :) emacs can wayland now                            :blogpost:
 [2022-10-21 Fri]
+
+* [ ] Fang mit der Präsi an, sobald grob fertig, & mach was dafür gebraucht/ mach die rund und halt sie.
+- Show a little 3d thing inside emacs (a shadertoy?). -> Future
+  # future this and emacs windows with wayland as was with x backend, could we ditch gtk?
+  # emacs has its own event loop and could draw menus too. A buffer world :)
+- Do it in here
+
+# ? Compare my poc with exwm codesize or do it later if more complete?
+
+# Nested emacsen
+
+# Get to sate to show something for präsi
+# get to state to test for conf
+# ask for feedback and ideas
+
+- Fractal video: Introduce yourself with fullscreen video, then go
+  fractal (C-x 3, C-x o, C-x 2 ... until window to small for
+  splitting), then show (possible) features and how to implement
+  Or show possible features first after intro? and then reveal it works already?
+  But I want to show possible features with my video -> Try
+
++ Nested under X | wayland => Emacs can be a WM anywhere linuxy
+-> a backend like pgtk/X/win
+
+My design is centered around the wayland protocol and mostly inspired by it.
+I think it came out quite functional and flexible but maybe a bit unemacsy.
+What do you think about it?
+
+I explored a wayland future for emacs
+           a possible
+           an other
+
+Multiple views for same buffer is quite emacsy
+Do you like it?
+
+tinywl <-> cage
+keep c minimal, but tinywl not enough and at same time to much
+compare ews with tinywl
+
+handling of keyboard:
+  For now all events are passed to client.
+  In future some/all are passed to emacs instead.
+  Maybe using own protocol.
+
+*Several views must share same height and width I think!*
+-> Why do them then?
+   I hacked them now to try this emacsy way. But maybe remove later?
+   Machinery is there: wlr_scene_buffer_set_dest_size et al
+   & its a kinda neat and unique wayland feature
+     maybe a little useless right now.
+     
+
+* Killing ewc kills emacs too -> Thanks GTK again for making this not flexible but brittle
+https://gitlab.gnome.org/GNOME/gtk/-/issues/174
+
+* make: guix shell --manifest=manifest.scm -- make check
+Uses Makefile for logic & manifest for dependencies.
+
+* Multiple views
+# wlr_xdg_toplevel.c
+wlr_xdg_toplevel_set_size
+	toplevel->scheduled.width = width;
+	toplevel->scheduled.height = height;
+	return wlr_xdg_surface_schedule_configure(toplevel->base);
+ewp_view@7.layout(0, 0, 663, 850)
+> layout runs here
+-> xdg_toplevel@28.configure(663, 850, array[0])
+-> xdg_surface@27.configure(57)
+
+# scene/surface.c
+set_buffer_with_surface_state(struct wlr_scene_buffer *scene_buffer, struct wlr_surface *surface)
+      wlr_surface_state *state = &surface->current;
+      ...
+      wlr_scene_buffer_set_dest_size(scene_buffer, state->width, state->height);
+	wlr_scene_buffer_set_transform(scene_buffer, state->transform);
+      ...
+
+used in handle_scene_surface_surface_commit      
+        wlr_scene_surface_create  (~used in wlr_scene_subsurface_tree_create ~and wlr_scene_xdg_surface_create)
+            wlr_surface->events.commit = handle_scene_surface_surface_commit
+        
+I use wlr_scene_xdg_surface_create
+  view->scene_tree = wlr_scene_xdg_surface_create(&surface->server->scene->tree
+
+which does:
+  	scene_xdg_surface->xdg_surface_commit.notify =
+		scene_xdg_surface_handle_xdg_surface_commit;
+	wl_signal_add(&xdg_surface->surface->events.commit,
+		&scene_xdg_surface->xdg_surface_commit);
+
+      scene_xdg_surface_update_position(scene_xdg_surface);          
+
+=> scene_xdg_surface_update_position & handle_scene_surface_surface_commit are on same signal
+
+wlr_xdg_surface -> wlr_surface -> wl_signal commit
+  & wl_signal has a listener_list
+
+* creating an xdg shell through the helper results in the following allocations:
+https://gitlab.freedesktop.org/wlroots/wlroots/-/issues/3458
+    wlr_scene_xdg_surface
+        scene tree for wlr_scene_xdg_surface
+        wlr_scene_subsurface_tree
+            scene tree for wlr_scene_subsurface_tree
+            wlr_scene_surface
+                wlr_scene_buffer
+
