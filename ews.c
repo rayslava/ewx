@@ -556,15 +556,55 @@ static void xdg_toplevel_request_fullscreen(struct wl_listener *listener, void *
   wlr_xdg_surface_schedule_configure(surface->xdg_toplevel->base);
 }
 
+static void set_dest_size(struct wlr_scene_buffer *buffer, int _lx, int _ly, void *data) {
+  wlr_log(WLR_DEBUG, "width=%d height=%d",
+          buffer->buffer->width,
+          buffer->buffer->height);
+  struct ews_view *view = data;
+  /* wlr_scene_buffer_set_dest_size(buffer, view->width, view->height); */
+  wlr_scene_buffer_set_dest_size(buffer, 150, 150);
+  wlr_log(WLR_DEBUG, "width=%d height=%d",
+          buffer->buffer->width,
+          buffer->buffer->height);
+  wlr_log(WLR_DEBUG, "width=%d height=%d",
+          buffer->dst_width,
+          buffer->dst_height);
+}
+
 static void layout(struct ews_view *view) {
-  if (view->width + view->height > view->surface->width + view->surface->height) {
-    view->surface->width = view->width;
-    view->surface->height = view->height;
-    wlr_xdg_toplevel_set_size(view->surface->xdg_toplevel, view->width, view->height);
+  /* Find biggest view */
+  int max_width = 0;
+  int max_height = 0;
+  struct ews_view *iter_view;
+  wl_list_for_each(iter_view, &view->surface->views, link) {
+    if (iter_view->width + iter_view->height > max_width + max_height) {
+      max_width = iter_view->width;
+      max_height = iter_view->height;
+    }
   }
-  /* wlr_scene_buffer_set_dest_size(wlr_scene_buffer_from_node(&view->scene_tree->node), */
+  /* Resize toplevel if max size changed. All views share the same surface. */
+  if (view->surface->width != max_width || view->surface->height != max_height) {
+    wlr_xdg_toplevel_set_size(view->surface->xdg_toplevel, max_width, max_height);
+    view->surface->width = max_width;
+    view->surface->height = max_height;
+  }
+  
+  /* struct wlr_scene_node *child; */
+  /* wl_list_for_each(child, &view->scene_tree->children, link) { */
+  /*   wlr_log(WLR_DEBUG, "tree=%d rect=%d buffer=%d",  */
+  /*           child->type == WLR_SCENE_NODE_TREE, */
+  /*           child->type == WLR_SCENE_NODE_RECT, */
+  /*           child->type == WLR_SCENE_NODE_BUFFER); */
+  /* } */
+  /* view->scene_tree->node.type = tree */
+
+  /* Set this views scaled size */
+  /* wlr_scene_buffer_set_dest_size(&view->scene_tree->node.buffer, */
   /*                                view->width, view->height); */
+  /* Set this views position */
   wlr_scene_node_set_position(&view->scene_tree->node, view->x, view->y);
+
+  wlr_scene_node_for_each_buffer(&view->scene_tree->node, set_dest_size, view);
 }
 
 static void ewp_view_handle_layout(struct wl_client *client, struct wl_resource *resource,
