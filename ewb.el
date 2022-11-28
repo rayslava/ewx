@@ -100,10 +100,10 @@
 
 (cl-defstruct (ewb-output (:constructor ewb-output-make)
                           (:copier nil))
-  (x 0 :type natnum :documentation "Top left x coordinate in output layout")
-  (y 0 :type natnum :documentation "Top left y coordinate in output layout")
-  (width 0 :type natnum :documentation "Output width")
-  (height 0 :type natnum :documentation "Output height")
+  (x nil :type natnum :documentation "Top left x coordinate in output layout")
+  (y nil :type natnum :documentation "Top left y coordinate in output layout")
+  (width nil :type natnum :documentation "Output width")
+  (height nil :type natnum :documentation "Output height")
   (name nil :type string :documentation "Output name")
   (description nil :type string :documentation "Output description")
   (frame nil :type frame :documentation "Linked frame")
@@ -150,7 +150,8 @@
     (when (eql pid (emacs-pid))
       (setf (ewb-output-surface output) surface)
       ;; Try to layout frame. Succeeds when x y width height are already set.
-      (ewb-output-layout-frame output))))
+      (ewb-output-layout-frame output)
+      t)))
 
 (defun ewb-output-new (registry outputs name version)
   (cl-assert (eql version 4))
@@ -162,7 +163,6 @@
     (setf (ewb-output-frame output)
           ;;             TODO: Pass env var/ integrate
           (make-frame '((display . "wayland-0"))))
-  
 
     (let ((wl-output (ewc-object-add :objects (ewc-object-objects registry)
                                      :protocol 'wayland
@@ -193,7 +193,7 @@
 ;; LAYOUT
 ;; on x y height width update
 ;; if view
-;;   destroy view
+;;   layout view
 ;; if surface
 ;;   output-surface  x y width height 4ALL from ewb-output struct
 
@@ -204,24 +204,23 @@
 
 ;; 1 layout frame surface on output
 (defun ewb-output-layout-frame (output)
-  "Returns nil if OUTPUT can not be layout out yet."
+  "Returns nil if OUTPUT can not be layed out yet."
   (pcase-let (((cl-struct ewb-output
                           surface view
                           x y width height)
                output))
 
     (when (and surface x y width height)
-      (when view
-        (ewc-request view 'destroy))
-  
-      (setf (ewb-output-view output)
-            (ewb-layout surface x y width height)))))
+      (if view
+          (ewb-layout view x y width height)
+        (setf (ewb-output-view output)
+              (ewb-layout surface x y width height))))))
 
 ;; 2 layout surface on output (with offset)
-(defun ewb-output-layout-surface (dx dy)
+(defun ewb-output-layout-function (dx dy)
   ;; ewb-layout-on-output ?
-  (lambda (surface x y width height)
-    (ewb-layout surface (+ x dx) (+ y dy) width height)))
+  (lambda (object x y width height)
+    (ewb-layout object (+ x dx) (+ y dy) width height)))
 ;; (setf (frame-parameter frame parameter) value)
 ;; -> Set ewb-output-layout-surface as layout-surface frame-parameter
 
@@ -239,7 +238,7 @@
     ;; Update layout-surface function
     (when (or x y)
       (setf (frame-parameter (ewb-output-frame output) 'layout-surface)
-            (ewb-output-layout-surface x y)))
+            (ewb-output-layout-function x y)))
 
     ;; Update output frame view
     (when (or x y width height)
@@ -279,20 +278,25 @@ The function should return nil if it does not handle this surface.")
                                                       )
                                       app-id title pid)))
 
-;; general layout function
-(defun ewb-layout (surface x y width height)
-  "Layout SURFACE an ewc-object at X Y with WIDTH and HEIGHT.
+;;; general layout function
+(defun ewb-layout (object x y width height)
+  "Layout a ewc-OBJECT, surface or view, at X Y with WIDTH and HEIGHT.
 Returns a view ewc-object."
-  (cl-assert (and (ewc-object-p surface)
+  (cl-assert (and (ewc-object-p object)
                   (seq-every-p #'natnump (list x y width height))))
 
-  (let ((view (ewc-object-add :objects (ewc-object-objects surface)
-                              :protocol 'emacs-wayland-protocol
-                              :interface 'ewp-view)))
-    (ewc-request surface 'layout `((id ,(ewc-object-id view))
-                                   (x ,x) (y ,y)
-                                   (width ,width) (height ,height)))
-    view))
+  (pcase (ewc-object-interface object)
+    ('ewp-surface
+     (let ((view (ewc-object-add :objects (ewc-object-objects object)
+                                 :protocol 'emacs-wayland-protocol
+                                 :interface 'ewp-view)))
+       (ewc-request object 'layout `((id . ,(ewc-object-id view))
+                                     (x . ,x) (y . ,y)
+                                     (width . ,width) (height . ,height)))
+       view))
+    ('ewp-view
+     (ewc-request object 'layout `((x . ,x) (y . ,y)
+                                   (width . ,width) (height . ,height))))))
 
 
 ;;; Buffer
