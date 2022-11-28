@@ -171,7 +171,7 @@ This is the elisp version of wayland-scanner."
 new-id is the id of the next client initiated object.
 table is a hash table from object id to `ewc-object'.
 protocols is an alist from `ewc-read'."
-  (new-id 1 :type integer)
+  (new-id 0 :type integer)
   (table (make-hash-table) :type hash-table :read-only t)
   (protocols nil :type list :read-only t))
 
@@ -199,7 +199,7 @@ Use optional ID for server initiated objects.
                   (ewc-objects-protocols objects)
                   (alist-get protocol)
                   (alist-get interface)))
-               (id (or id (ewc-objects-new-id objects)))
+               (id (or id (cl-incf (ewc-objects-new-id objects))))
                (object (ewc-object-make
                         :protocol protocol
                         :interface interface
@@ -209,7 +209,6 @@ Use optional ID for server initiated objects.
                         :requests requests
                         :objects objects)))
     (puthash id object (ewc-objects-table objects))
-    (cl-incf (ewc-objects-new-id objects))
     object))
 
 ;; This sets the listener for all objects created from the same protocols.
