@@ -562,8 +562,8 @@ static void layout(struct ews_view *view) {
     view->surface->height = view->height;
     wlr_xdg_toplevel_set_size(view->surface->xdg_toplevel, view->width, view->height);
   }
-  wlr_scene_buffer_set_dest_size(wlr_scene_buffer_from_node(&view->scene_tree->node),
-                                 view->width, view->height);
+  /* wlr_scene_buffer_set_dest_size(wlr_scene_buffer_from_node(&view->scene_tree->node), */
+  /*                                view->width, view->height); */
   wlr_scene_node_set_position(&view->scene_tree->node, view->x, view->y);
 }
 
@@ -649,12 +649,18 @@ static void server_new_xdg_surface(struct wl_listener *listener, void *data) {
     wl_container_of(listener, server, new_xdg_surface);
   struct wlr_xdg_surface *xdg_surface = data;
 
+  /* DEBUG ignore for extra ews */
+  if (server->layout_resource == NULL) {
+    return;
+  }
+
   /* We must add xdg popups to the scene graph so they get rendered. The
    * wlroots scene graph provides a helper for this, but to use it we must
    * provide the proper parent scene node of the xdg popup. To enable this,
    * we always set the user data field of xdg_surfaces to the corresponding
    * scene node. */
   if (xdg_surface->role == WLR_XDG_SURFACE_ROLE_POPUP) {
+    return;                     /* XXXX DEBUG */
     struct wlr_xdg_surface *parent = wlr_xdg_surface_from_wlr_surface(xdg_surface->popup->parent);
     struct wlr_scene_tree *parent_tree = parent->data;
     xdg_surface->data = wlr_scene_xdg_surface_create(parent_tree, xdg_surface);
