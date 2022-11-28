@@ -209,6 +209,7 @@ Use optional ID for server initiated objects.
                         :requests requests
                         :objects objects)))
     (puthash id object (ewc-objects-table objects))
+    (message "Added object id=%s interface=%s" id interface) ; DEBUG
     object))
 
 ;; This sets the listener for all objects created from the same protocols.
@@ -306,6 +307,7 @@ Returns a `ewc-objects' struct with wl-display as object 1."
 
 (defun ewc-request (object request &optional arguments)
   "Issue REQUEST with ARGUMENTS of OBJECT an `ewc-object'."
+  (message "Sending request to %s" (ewc-object-id object)) ; DEBUG
   (process-send-string (ewc-object-data ; wl-display
                         (ewc-object-get 1 (ewc-object-objects object)))
                        (ewc-pack object request arguments)))

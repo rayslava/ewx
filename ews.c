@@ -601,6 +601,8 @@ static void ewp_surface_handle_layout(struct wl_client *client, struct wl_resour
                                       uint32_t id,
                                       uint32_t x, uint32_t y,
                                       uint32_t width, uint32_t height) {
+  wlr_log(WLR_DEBUG, "Laying out surface id=%d x=%d y=%d width=%d height=%d", id, x, y, width, height);
+
   /* TODO: Integrate with xdg_toplevel_map; make map atomic = show on layout or map */
   struct ews_surface *surface = wl_resource_get_user_data(resource);
 

@@ -147,7 +147,9 @@
 
 (defun ewb-output-init-surface (output)
   (lambda (surface _app-id _title pid)
+    (message "Init with pid %s=%s?" pid (emacs-pid))            ; DEBUG
     (when (eql pid (emacs-pid))
+      (message "Init with pid %s!" pid)            ; DEBUG
       (setf (ewb-output-surface output) surface)
       ;; Try to layout frame. Succeeds when x y width height are already set.
       (ewb-output-layout-frame output)
@@ -164,6 +166,9 @@
           ;;             TODO: Pass env var/ integrate
           (make-frame '((display . "wayland-0"))))
 
+    (message "Made a frame")            ; DEBUG
+    (message "terminals %s" (terminal-list))            ; DEBUG
+    
     (let ((wl-output (ewc-object-add :objects (ewc-object-objects registry)
                                      :protocol 'wayland
                                      :interface 'wl-output
@@ -210,11 +215,14 @@
                           x y width height)
                output))
 
+    (message "Layout frame %s %s %s %s" x y width height) ; DEBUG
     (when (and surface x y width height)
       (if view
           (ewb-layout view x y width height)
         (setf (ewb-output-view output)
-              (ewb-layout surface x y width height))))))
+              (ewb-layout surface x y width height)))
+      (message "Layed out frame!") ; DEBUG
+      )))
 
 ;; 2 layout surface on output (with offset)
 (defun ewb-output-layout-function (dx dy)
@@ -264,7 +272,8 @@ Each function is passed surface app-id title pid as arguments
 The function should return nil if it does not handle this surface.")
 
 (defun ewb-surface-new (object args)
-  (message "New surface: %s" args)
+  (message "New surface: %s" args) ; DEBUG
+  
   (pcase-let (((map id ('app_id app-id) title pid) args))
     ;; handle update-title and destroy events -> do it once in init
 
@@ -284,6 +293,10 @@ The function should return nil if it does not handle this surface.")
 Returns a view ewc-object."
   (cl-assert (and (ewc-object-p object)
                   (seq-every-p #'natnump (list x y width height))))
+
+  (message "Trying to make a view for surface id=%s interface=%s"
+           (ewc-object-id object)
+           (ewc-object-interface object))     ; DEBUG
 
   (pcase (ewc-object-interface object)
     ('ewp-surface
@@ -320,12 +333,14 @@ Returns a view ewc-object."
      :buffer "*emacs-wayland-server*"
      :command (list (expand-file-name "./ews"))
      :filter (lambda (proc str)
+               ;; (message "S: %s" str)
+                                        ; DEBUG
                (with-current-buffer (process-buffer proc)
                  (goto-char (point-max))
                  (save-excursion (insert str))
                  (when (re-search-forward (rx "WAYLAND_DISPLAY=" (group (+ (not control))))
                                           nil t)
-                   (setf (process-filter proc) #'internal-default-process-filter)
+                   ;; (setf (process-filter proc) #'internal-default-process-filter)
                    (ewb-2 (match-string 1))))))))
 
 ;; set WAYLAND_DISPLAY inside emacs instead of arg
