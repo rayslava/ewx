@@ -79,20 +79,15 @@ struct ews_surface {
   struct wl_list link;
   struct ews_server *server;
   struct wlr_xdg_toplevel *xdg_toplevel;
-  struct wl_list views;
-  int width, height;
+  struct wlr_scene_tree *scene_tree;
+  struct wl_resource *ewp_surface;
+  int x, y, width, height;
+  bool mapped;
   struct wl_listener map;
   struct wl_listener unmap;
   struct wl_listener destroy;
   struct wl_listener request_maximize;
   struct wl_listener request_fullscreen;
-};
-
-struct ews_view {
-  struct wl_list link;
-  struct ews_surface *surface;
-  struct wlr_scene_tree *scene_tree;
-  int x, y, width, height;
 };
 
 struct ews_keyboard {
@@ -505,19 +500,22 @@ static void xdg_toplevel_map(struct wl_listener *listener, void *data) {
   /* Called when the surface is mapped, or ready to display on-screen. */
   struct ews_surface *surface = wl_container_of(listener, surface, map);
   
-  wlr_log(WLR_ERROR, "Attention: Someone called xdg_toplevel_map");
+  surface->mapped = true;
 }
 
 static void xdg_toplevel_unmap(struct wl_listener *listener, void *data) {
   /* Called when the surface is unmapped, and should no longer be shown. */
   struct ews_surface *surface = wl_container_of(listener, surface, unmap);
-  
+
+  /* Not handled, because emacs decides when to unmap. */
   wlr_log(WLR_ERROR, "Attention: Someone called xdg_toplevel_unmap");
 }
 
-static void ewp_surface_destroy(struct ews_surface *surface) {
-  /* TODO: ewp_surface destroy event */
+static void ewp_surface_destroy(struct wl_resource *resource) {
+  ewp_surface_send_destroy(resource);
+  struct ews_surface *surface = wl_resource_get_user_data(resource);
 
+  wl_list_remove(&surface->link);
   wl_list_remove(&surface->map.link);
   wl_list_remove(&surface->unmap.link);
   wl_list_remove(&surface->destroy.link);
@@ -527,15 +525,10 @@ static void ewp_surface_destroy(struct ews_surface *surface) {
   free(surface);
 }
 
-static void ewp_surface_handle_destroy(struct wl_resource *resource) {
-  struct ews_surface *surface = wl_resource_get_user_data(resource);
-  ewp_surface_destroy(surface);
-}
-
 static void xdg_toplevel_destroy(struct wl_listener *listener, void *data) {
   /* Called when the surface is destroyed and should never be shown again. */
   struct ews_surface *surface = wl_container_of(listener, surface, destroy);
-  ewp_surface_destroy(surface);
+  wl_resource_destroy(surface->ewp_surface);
 }
 
 static void xdg_toplevel_request_maximize(struct wl_listener *listener, void *data) {
@@ -556,125 +549,59 @@ static void xdg_toplevel_request_fullscreen(struct wl_listener *listener, void *
   wlr_xdg_surface_schedule_configure(surface->xdg_toplevel->base);
 }
 
-static void set_dest_size(struct wlr_scene_buffer *buffer, int _lx, int _ly, void *data) {
-  wlr_log(WLR_DEBUG, "width=%d height=%d",
-          buffer->buffer->width,
-          buffer->buffer->height);
-  struct ews_view *view = data;
-  /* wlr_scene_buffer_set_dest_size(buffer, view->width, view->height); */
-  wlr_scene_buffer_set_dest_size(buffer, 150, 150);
-  wlr_log(WLR_DEBUG, "width=%d height=%d",
-          buffer->buffer->width,
-          buffer->buffer->height);
-  wlr_log(WLR_DEBUG, "width=%d height=%d",
-          buffer->dst_width,
-          buffer->dst_height);
-}
-
-static void layout(struct ews_view *view) {
-  /* Find biggest view */
-  int max_width = 0;
-  int max_height = 0;
-  struct ews_view *iter_view;
-  wl_list_for_each(iter_view, &view->surface->views, link) {
-    if (iter_view->width + iter_view->height > max_width + max_height) {
-      max_width = iter_view->width;
-      max_height = iter_view->height;
-    }
+static void layout_surface(struct ews_surface *surface) {
+  /* Add scene_tree for surface if missing */
+  if (surface->scene_tree == NULL) {
+    surface->scene_tree = wlr_scene_xdg_surface_create(&surface->server->scene->tree,
+                                                       surface->xdg_toplevel->base);
+    /* For surface_at */
+    surface->scene_tree->node.data = surface;
+  } else {
+    wlr_scene_node_set_enabled(&surface->scene_tree->node, true);
   }
-  /* Resize toplevel if max size changed. All views share the same surface. */
-  if (view->surface->width != max_width || view->surface->height != max_height) {
-    wlr_xdg_toplevel_set_size(view->surface->xdg_toplevel, max_width, max_height);
-    view->surface->width = max_width;
-    view->surface->height = max_height;
-  }
-  
-  /* struct wlr_scene_node *child; */
-  /* wl_list_for_each(child, &view->scene_tree->children, link) { */
-  /*   wlr_log(WLR_DEBUG, "tree=%d rect=%d buffer=%d",  */
-  /*           child->type == WLR_SCENE_NODE_TREE, */
-  /*           child->type == WLR_SCENE_NODE_RECT, */
-  /*           child->type == WLR_SCENE_NODE_BUFFER); */
-  /* } */
-  /* view->scene_tree->node.type = tree */
 
-  /* Set this views scaled size */
-  /* wlr_scene_buffer_set_dest_size(&view->scene_tree->node.buffer, */
-  /*                                view->width, view->height); */
-  /* Set this views position */
-  wlr_scene_node_set_position(&view->scene_tree->node, view->x, view->y);
-
-  wlr_scene_node_for_each_buffer(&view->scene_tree->node, set_dest_size, view);
+  wlr_xdg_toplevel_set_size(surface->xdg_toplevel, surface->width, surface->height);
+  wlr_scene_node_set_position(&surface->scene_tree->node, surface->x, surface->y);
 }
-
-static void ewp_view_handle_layout(struct wl_client *client, struct wl_resource *resource,
-                                   uint32_t x, uint32_t y,
-                                   uint32_t width, uint32_t height) {
-  struct ews_view *view = wl_resource_get_user_data(resource);
-  view->x = x;
-  view->y = y;
-  view->width = width;
-  view->height = height;
-  layout(view);
-}
-
-static void ewp_view_destroy(struct wl_resource *resource) {
-  struct ews_view *view = wl_resource_get_user_data(resource);
-  wl_list_remove(&view->link);
-  
-  wlr_scene_node_destroy(&view->scene_tree->node);
-
-  free(view);
-}
-
-static void ewp_view_handle_destroy(struct wl_client *client, struct wl_resource *resource) {
-  wl_resource_destroy(resource);
-}
-
-static const struct ewp_view_interface
-ewp_view_implementation = {
-  .layout = ewp_view_handle_layout,
-  .destroy = ewp_view_handle_destroy,
-};
 
 static void ewp_surface_handle_layout(struct wl_client *client, struct wl_resource *resource,
-                                      uint32_t id,
                                       uint32_t x, uint32_t y,
                                       uint32_t width, uint32_t height) {
-  wlr_log(WLR_DEBUG, "Laying out surface id=%d x=%d y=%d width=%d height=%d", id, x, y, width, height);
+  wlr_log(WLR_DEBUG, "Laying out surface x=%d y=%d width=%d height=%d", x, y, width, height);
 
-  /* TODO: Integrate with xdg_toplevel_map; make map atomic = show on layout or map */
   struct ews_surface *surface = wl_resource_get_user_data(resource);
 
-  /* Allocate a ews_view */
-  struct ews_view *view =
-    calloc(1, sizeof(struct ews_view));
-  view->surface = surface;
-  wl_list_insert(&surface->views, &view->link);
-  view->scene_tree = wlr_scene_xdg_surface_create(&surface->server->scene->tree,
-                                                  surface->xdg_toplevel->base);
-  /* For surface_at */
-  view->scene_tree->node.data = surface;
-  
-  view->x = x;
-  view->y = y;
-  view->width = width;
-  view->height = height;
-  layout(view);
-
-  /* Create an ewp_view */
-  struct wl_resource *view_resource = wl_resource_create(client, &ewp_view_interface, 1, id);
-  wl_resource_set_implementation(view_resource, &ewp_view_implementation,
-                                 view, ewp_view_destroy);
+  surface->x = x;
+  surface->y = y;
+  surface->width = width;
+  surface->height = height;
+  if (surface->mapped) {
+      layout_surface(surface);
+  }
   
   /* focus_surface(ews_surface, surface->xdg_toplevel->base->surface); */
   /* = Set focus (of seat)? */
+  /* Or do in layout_surface? */
+}
+
+static void ewp_surface_handle_hide(struct wl_client *client, struct wl_resource *resource) {
+  struct ews_surface *surface = wl_resource_get_user_data(resource);
+  if (surface->scene_tree != NULL) {
+    wlr_scene_node_set_enabled(&surface->scene_tree->node, false);
+  }
+}
+
+static void ewp_surface_handle_client_destroy(struct wl_client *client, struct wl_resource *resource) {
+  wl_resource_destroy(resource);
 }
 
 static const struct ewp_surface_interface
 ewp_surface_implementation = {
   .layout = ewp_surface_handle_layout,
+  .hide = ewp_surface_handle_hide,
+  .destroy = ewp_surface_handle_client_destroy,
 };
+/* TODO: 2 events destroy & update_title */
 
 static void server_new_xdg_surface(struct wl_listener *listener, void *data) {
   /* This event is raised when wlr_xdg_shell receives a new xdg surface from a
@@ -702,7 +629,6 @@ static void server_new_xdg_surface(struct wl_listener *listener, void *data) {
    * we always set the user data field of xdg_surfaces to the corresponding
    * scene node. */
   if (xdg_surface->role == WLR_XDG_SURFACE_ROLE_POPUP) {
-    return;                     /* XXXX DEBUG */
     struct wlr_xdg_surface *parent = wlr_xdg_surface_from_wlr_surface(xdg_surface->popup->parent);
     struct wlr_scene_tree *parent_tree = parent->data;
     xdg_surface->data = wlr_scene_xdg_surface_create(parent_tree, xdg_surface);
@@ -720,15 +646,15 @@ static void server_new_xdg_surface(struct wl_listener *listener, void *data) {
   /* Allocate a ews_surface for this surface */
   struct ews_surface *surface =
     calloc(1, sizeof(struct ews_surface));
+  wl_list_insert(&server->surfaces, &surface->link);
   surface->server = server;
   surface->xdg_toplevel = xdg_surface->toplevel;
-  wl_list_init(&surface->views);
 
   /* Create an ewp_surface */
   struct wl_client *client = wl_resource_get_client(server->layout_resource);
   struct wl_resource *resource = wl_resource_create(client, &ewp_surface_interface, 1, 0);
   wl_resource_set_implementation(resource, &ewp_surface_implementation,
-                                 surface, ewp_surface_handle_destroy);
+                                 surface, ewp_surface_destroy);
 
   pid_t pid;
   wl_client_get_credentials(xdg_surface->client->client, &pid, 0, 0);
@@ -758,32 +684,9 @@ static void server_new_xdg_surface(struct wl_listener *listener, void *data) {
                 &surface->request_fullscreen);
 }
 
-/* emacs wayland protocol */
-
-/* event */
-/* from ewp-protocol.h */
-/* ewp_layout_send_layout_new_window(struct wl_resource *resource_, uint32_t current_output, */
-/*                                   uint32_t usable_width, uint32_t usable_height,  */
-/*                                   uint32_t tags, const char *title, */
-/*                                   const char *application, uint32_t pid) */
-
-/* static void */
-/* ewp_layout_handle_layout_window(struct wl_client *client, struct wl_resource *resource, */
-/*                                 uint32_t x, uint32_t y, uint32_t width, uint32_t height) { */
-/*   /\* TODO: implement the request *\/ */
-/*  /\* args: x, y, width, height *\/ */
-/* } */
-
-/* static const struct ewp_layout_interface */
-/* ewp_layout_implementation = { */
-/*   .layout_window = ewp_layout_handle_layout_window, */
-/* }; */
-
 struct ewp_layout { 
   struct ews_server *server;
 };
-
-/* wl_client->pid / uid / gid (see wayland-server.c) */
 
 static void ewp_layout_handle_bind(struct wl_client *client, void *data,
                                    uint32_t version, uint32_t id) {

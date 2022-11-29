@@ -22,19 +22,12 @@
     The wayland server sends the new_surface event on xdg_shell
     toplevel creation and creates a ewp_surface object.
 
-    The layout client can then layout this ewp_surface object which
-    creates a ewp_view.
+    The layout client can then layout this ewp_surface object.
 
-    in ewp:   ewp_layout             -> ewp_surface    -> ewp_view
-    in emacs: client=events,requests -> wayland buffer -> wayland buffer shown in window
+    in ewp:   ewp_layout             -> ewp_surface
+    in emacs: client=events,requests -> wayland buffer
 
     ewp_layout object gets notified about new toplevel surfaces -> ewp_surface
-    
-    ewp_surface layout is show or map -> ewp_view
-
-    ewp_view destroy is hide or unmap
-
-    This allows for multiple views.
   </description>
 
   <interface name="ewp_layout" version="1">
@@ -63,52 +56,38 @@
       <description summary="Layout surface">
         Layout surface by setting its x and y position and its width and height size.
         Shows the surface at x and y of its parent with width and height.
-        Creates a view object for this layout.
       </description>
-      <arg name="id" type="new_id" interface="ewp_view" summary="The new ewp_view object"/>
       <arg name="x" type="uint" summary="x coordinate of window origin"/>
       <arg name="y" type="uint" summary="y coordinate of window origin"/>
       <arg name="width" type="uint" summary="width of window"/>
       <arg name="height" type="uint" summary="height of window"/>
     </request>
 
+    <request name="hide">
+      <description summary="Hide">
+        Hide this surface.
+      </description>
+    </request>
+
+    <request name="destroy" type="destructor">
+      <description summary="Destroy request">
+        Request destruction of this surface.
+      </description>
+    </request>
+
+    <event name="destroy" type="destructor">
+      <description summary="Destroy event">
+        Inform the client of the destruction of this surface.
+      </description>
+    </event>
+
     <event name="update_title">
-      <description summary="updated title">
+      <description summary="Updated title">
         Inform the client about a new title for this surface.
       </description>
       <arg name="title" type="string" summary="shell title"/>
     </event>
 
-    <event name="destroy" type="destructor">
-      <description summary="destroy event">
-        Inform the client of the destruction of this interface.
-      </description>
-    </event>
   </interface>
-
-  <interface name="ewp_view" version="1">
-    <description summary="A mapped surface">
-      If a ewp_surface is layed out an ewp_view is created. This is its interface.
-    </description>
-
-    <request name="layout">
-      <description summary="Layout view">
-        Updata views layout by setting its x and y position and its width and height size.
-        Shows the view at x and y of its parent with width and height.
-      </description>
-      <arg name="x" type="uint" summary="x coordinate of window origin"/>
-      <arg name="y" type="uint" summary="y coordinate of window origin"/>
-      <arg name="width" type="uint" summary="width of window"/>
-      <arg name="height" type="uint" summary="height of window"/>
-    </request>
-
-    <request name="destroy" type="destructor">
-      <description summary="destroy the view">
-        Request destruction of the view. This deletes the ewp_view
-        object and hides it. Destroying the view is equivalent to unmapping the surface.
-      </description>
-    </request>
-  </interface>
-
   <!-- A method to group (and commit) changes? -->
 </protocol>

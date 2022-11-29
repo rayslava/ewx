@@ -23,7 +23,7 @@
 
 ;; 2nd take
 
-;; surface -> layout -> view
+;; surface -> layout
 
 ;; different kind of surfaces:
 ;;   1. emacs frame
@@ -37,7 +37,7 @@
 
 ;; 2: default for new surface -> make-buffer & link with surface (buffer-local)
 
-;; Setup ewb buffer to create/delete/update view on show/hide/update
+;; Setup ewb buffer to create/delete/update layout on show/hide/update
 
 ;; Output size change -> relayout linked frame
 
@@ -107,8 +107,7 @@
   (name nil :type string :documentation "Output name")
   (description nil :type string :documentation "Output description")
   (frame nil :type frame :documentation "Linked frame")
-  (surface nil :type ewc-object :documentation "Surface of linked frame")
-  (view nil :type ewc-object :documentation "Current view of linked frame"))
+  (surface nil :type ewc-object :documentation "Surface of linked frame"))
 
 ;; TODO: Abstract; this is simple listener free version.
 (defun ewb-output-xdg-manager (registry name version)
@@ -197,8 +196,6 @@
 
 ;; LAYOUT
 ;; on x y height width update
-;; if view
-;;   layout view
 ;; if surface
 ;;   output-surface  x y width height 4ALL from ewb-output struct
 
@@ -210,18 +207,14 @@
 ;; 1 layout frame surface on output
 (defun ewb-output-layout-frame (output)
   "Returns nil if OUTPUT can not be layed out yet."
-  (pcase-let (((cl-struct ewb-output
-                          surface view
+  (pcase-let (((cl-struct ewb-output surface 
                           x y width height)
                output))
 
     (message "Layout frame %s %s %s %s" x y width height) ; DEBUG
     (when (and surface x y width height)
-      (if view
-          (ewb-layout view x y width height)
-        (setf (ewb-output-view output)
-              (ewb-layout surface x y width height)))
-      (message "Layed out frame!") ; DEBUG
+      (ewb-layout surface x y width height)
+      (message "Layed out frame!")      ; DEBUG
       )))
 
 ;; 2 layout surface on output (with offset)
@@ -248,7 +241,7 @@
       (setf (frame-parameter (ewb-output-frame output) 'layout-surface)
             (ewb-output-layout-function x y)))
 
-    ;; Update output frame view
+    ;; Update output frame layout
     (when (or x y width height)
       (ewb-output-layout-frame output))))
 
@@ -288,29 +281,17 @@ The function should return nil if it does not handle this surface.")
                                       app-id title pid)))
 
 ;;; general layout function
-(defun ewb-layout (object x y width height)
-  "Layout a ewc-OBJECT, surface or view, at X Y with WIDTH and HEIGHT.
-Returns a view ewc-object."
-  (cl-assert (and (ewc-object-p object)
+(defun ewb-layout (surface x y width height)
+  "Layout a ewp-SURFACE at X Y with WIDTH and HEIGHT."
+  (cl-assert (and (ewc-object-p surface)
                   (seq-every-p #'natnump (list x y width height))))
 
-  (message "Trying to make a view for surface id=%s interface=%s"
-           (ewc-object-id object)
-           (ewc-object-interface object))     ; DEBUG
+  (message "Trying to layout surface id=%s interface=%s"
+           (ewc-object-id surface)
+           (ewc-object-interface surface)) ; DEBUG
 
-  (pcase (ewc-object-interface object)
-    ('ewp-surface
-     (let ((view (ewc-object-add :objects (ewc-object-objects object)
-                                 :protocol 'emacs-wayland-protocol
-                                 :interface 'ewp-view)))
-       (ewc-request object 'layout `((id . ,(ewc-object-id view))
-                                     (x . ,x) (y . ,y)
-                                     (width . ,width) (height . ,height)))
-       view))
-    ('ewp-view
-     (ewc-request object 'layout `((x . ,x) (y . ,y)
-                                   (width . ,width) (height . ,height))))))
-
+  (ewc-request surface 'layout `((x . ,x) (y . ,y)
+                                 (width . ,width) (height . ,height))))
 
 ;;; Buffer
 (defvar-local ewb-buffer-surface nil)
@@ -353,7 +334,7 @@ Returns a view ewc-object."
                              ("/gnu/store/4xinswliqgki9sxkffh1gg4fdymca0ph-wayland-protocols-1.26/share/wayland-protocols/unstable/xdg-output/xdg-output-unstable-v1.xml"
                               zxdg-output-manager-v1 zxdg-output-v1) ; = all interfaces
                              ("ewp.xml"
-                              ewp-layout ewp-surface ewp-view))
+                              ewp-layout ewp-surface))
                    (expand-file-name socket (xdg-runtime-dir))))
          (registry (ewc-object-add :objects objects
                                    :protocol 'wayland
@@ -377,10 +358,6 @@ Returns a view ewc-object."
               ("ewp_layout" (ewb-init-layout registry name version outputs)))))
 
     (ewc-request (ewc-object-get 1 objects) 'get-registry `((registry . ,(ewc-object-id registry))))))
-
-;;; NEXT:
-;; - Rig up frame
-;; - Rig up display of surface (= ewp-view)
 
 ;;; TODO:
 ;; - Abstract common pattern: ewc-object-add -> objects & ewc-request with object-id in args
