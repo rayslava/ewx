@@ -653,6 +653,7 @@ static void server_new_xdg_surface(struct wl_listener *listener, void *data) {
   struct wl_resource *resource = wl_resource_create(client, &ewp_surface_interface, 1, 0);
   wl_resource_set_implementation(resource, &ewp_surface_implementation,
                                  surface, ewp_surface_destroy);
+  surface->ewp_surface = resource;
 
   pid_t pid;
   wl_client_get_credentials(xdg_surface->client->client, &pid, 0, 0);
