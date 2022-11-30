@@ -119,8 +119,7 @@ static void focus_surface(struct ews_surface *ews_surface, struct wlr_surface *s
      * it no longer has focus and the client will repaint accordingly, e.g.
      * stop displaying a caret.
      */
-    struct wlr_xdg_surface *previous = wlr_xdg_surface_from_wlr_surface(
-                                                                        seat->keyboard_state.focused_surface);
+    struct wlr_xdg_surface *previous = wlr_xdg_surface_from_wlr_surface(seat->keyboard_state.focused_surface);
     assert(previous->role == WLR_XDG_SURFACE_ROLE_TOPLEVEL);
     wlr_xdg_toplevel_set_activated(previous->toplevel, false);
   }
@@ -289,8 +288,8 @@ static struct ews_surface *surface_at(struct ews_server *server, double lx, doub
   /* This returns the topmost node in the scene at the given layout coords.
    * we only care about surface nodes as we are specifically looking for a
    * surface in the surface tree of a ews_surface. */
-  struct wlr_scene_node *node = wlr_scene_node_at(
-                                                  &server->scene->tree.node, lx, ly, sx, sy);
+  struct wlr_scene_node *node = wlr_scene_node_at(&server->scene->tree.node,
+                                                  lx, ly, sx, sy);
   if (node == NULL || node->type != WLR_SCENE_NODE_BUFFER) {
     return NULL;
   }
@@ -317,13 +316,13 @@ static void process_cursor_motion(struct ews_server *server, uint32_t time) {
   struct wlr_seat *seat = server->seat;
   struct wlr_surface *surface = NULL;
   struct ews_surface *ews_surface = surface_at(server,
-                                               server->cursor->x, server->cursor->y, &surface, &sx, &sy);
+                                               server->cursor->x, server->cursor->y,
+                                               &surface, &sx, &sy);
   if (!surface) {
     /* If there's no view under the cursor, set the cursor image to a
      * default. This is what makes the cursor image appear when you move it
      * around the screen, not over any views. */
-    wlr_xcursor_manager_set_cursor_image(
-                                         server->cursor_mgr, "left_ptr", server->cursor);
+    wlr_xcursor_manager_set_cursor_image(server->cursor_mgr, "left_ptr", server->cursor);
   }
   if (surface) {
     /*
@@ -390,7 +389,8 @@ static void server_cursor_button(struct wl_listener *listener, void *data) {
   double sx, sy;
   struct wlr_surface *surface = NULL;
   struct ews_surface *ews_surface = surface_at(server,
-                                              server->cursor->x, server->cursor->y, &surface, &sx, &sy);
+                                              server->cursor->x, server->cursor->y,
+                                               &surface, &sx, &sy);
   if (event->state == WLR_BUTTON_PRESSED) {
     /* Focus client where button was _pressed_ */
     focus_surface(ews_surface, surface);
@@ -635,12 +635,6 @@ static void server_new_xdg_surface(struct wl_listener *listener, void *data) {
     struct wlr_xdg_surface *parent = wlr_xdg_surface_from_wlr_surface(xdg_surface->popup->parent);
     struct wlr_scene_tree *parent_tree = parent->data;
     xdg_surface->data = wlr_scene_xdg_surface_create(parent_tree, xdg_surface);
-    
-    pid_t pid;
-    wl_client_get_credentials(parent->client->client, &pid, NULL, NULL);
-    wlr_log(WLR_DEBUG, "New popup XDG surface app_id=%s title=%s pid=%d",
-            parent->toplevel->app_id, parent->toplevel->title, pid);
-    
     return;
   }
 
