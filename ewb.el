@@ -302,30 +302,24 @@ The function should return nil if it does not handle this surface.")
     (setq ewb-buffer-surface surface)))
 
 ;;; Init
-;; ewb-init with tmp names: ewb-1 -> ewb-2
-(defun ewb-1 ()
-  (let ((process-environment
-         (cons "WLR_X11_OUTPUTS=2"
-               ;; DEBUG
-               (cons "WAYLAND_DEBUG=1"
-                     process-environment))))
-    (make-process
-     :name "emacs-wayland-server"
-     :buffer "*emacs-wayland-server*"
-     :command (list (expand-file-name "./ews"))
-     :filter (lambda (proc str)
-               ;; (message "S: %s" str)
+(defun ewb-start-server ()
+  (make-process
+   :name "emacs-wayland-server"
+   :buffer "*emacs-wayland-server*"
+   :command (list (expand-file-name "./ews"))
+   :filter (lambda (proc str)
+             ;; (message "S: %s" str)
                                         ; DEBUG
-               (with-current-buffer (process-buffer proc)
-                 (goto-char (point-max))
-                 (save-excursion (insert str))
-                 (when (re-search-forward (rx "WAYLAND_DISPLAY=" (group (+ (not control))))
-                                          nil t)
-                   ;; (setf (process-filter proc) #'internal-default-process-filter)
-                   (ewb-2 (match-string 1))))))))
-
+             (with-current-buffer (process-buffer proc)
+               (goto-char (point-max))
+               (save-excursion (insert str))
+               (when (re-search-forward (rx "WAYLAND_DISPLAY=" (group (+ (not control))))
+                                        nil t)
+                 ;; (setf (process-filter proc) #'internal-default-process-filter)
+                 (ewb-start-client (match-string 1)))))))
 ;; set WAYLAND_DISPLAY inside emacs instead of arg
-(defun ewb-2 (socket)
+
+(defun ewb-start-client (socket)
   (let* ((objects (ewc-connect
                    (ewc-read ("~/s/wayland/ref/wayland/protocol/wayland.xml"
                               wl-display wl-registry wl-output)
@@ -358,6 +352,12 @@ The function should return nil if it does not handle this surface.")
               ("ewp_layout" (ewb-init-layout registry name version outputs)))))
 
     (ewc-request (ewc-object-get 1 objects) 'get-registry `((registry . ,(ewc-object-id registry))))))
+
+(defun ewb-init ()
+  ;; Make emacs resize pixelwise
+  (setq frame-resize-pixelwise t
+        window-resize-pixelwise t)
+  (ewb-start-server))
 
 ;;; TODO:
 ;; - Abstract common pattern: ewc-object-add -> objects & ewc-request with object-id in args
