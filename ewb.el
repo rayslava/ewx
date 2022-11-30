@@ -318,6 +318,16 @@ The function should return nil if it does not handle this surface.")
 ;;; Buffer
 (defvar-local ewb-buffer-surface nil)
 
+(defun ewb-buffer-layout ()
+  (pcase-let ((`(,left ,top ,right ,bottom) (window-absolute-body-pixel-edges)))
+    (message "Update layout %s %s %s %s" left top right bottom)
+    
+    (funcall (frame-parameter nil 'layout-surface)
+             ewb-buffer-surface
+             left top
+             (- right left) (- bottom top)
+             t)))
+
 (define-derived-mode ewb-buffer-mode nil "X"
   "Major mode for managing wayland buffers.
 
@@ -337,7 +347,9 @@ The function should return nil if it does not handle this surface.")
         right-margin-width nil
         left-fringe-width 0
         right-fringe-width 0
-        vertical-scroll-bar nil))
+        vertical-scroll-bar nil)
+
+  (add-hook 'window-configuration-change-hook #'ewb-buffer-layout nil t))
 
 (defun ewb-buffer-init (surface _app-id title _pid)
   (with-current-buffer (generate-new-buffer (format "*X %s*" title))
