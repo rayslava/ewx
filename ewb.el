@@ -218,12 +218,32 @@
       )))
 
 ;; 2 layout surface on output (with offset)
-(defun ewb-output-layout-function (dx dy)
+(defun ewb-output-layout-function (dx dy dheight)
   ;; ewb-layout-on-output ?
-  (lambda (object x y width height)
-    (ewb-layout object (+ x dx) (+ y dy) width height)))
+  (lambda (object x y width height &optional inner-p)
+    "If INNER-P layout in frames inner area, the area occupied by
+windows including the minibuffer."
+    ;; Offset for menu- and tool-bar
+    ;; frame-outer-height could be used instead of dheight
+    ;; but is same as frame-inner-height on pgtk. BUG?
+    (ewb-layout object (+ x dx) (+ y dy
+                                   (if inner-p
+                                       (- dheight (frame-inner-height))
+                                     0))
+                width height)))
 ;; (setf (frame-parameter frame parameter) value)
 ;; -> Set ewb-output-layout-surface as layout-surface frame-parameter
+
+;; frame-heights
+;; (frame-inner-height)
+;; => 1200 1134
+;; (frame-outer-height)
+;; => 1200 1200
+;; (frame-text-height)                       ; text area
+;; => 1200 1134
+;; (frame-native-height)                     ; on gtk no menu or toolbar
+;; => 1200 1134
+;; 2nd value is with tool&menu-bar
 
 (defun ewb-output-update (output update)
   ;; Used in ewb-output-listener done
@@ -237,9 +257,11 @@
     (when description (setf (ewb-output-description output) description))
     
     ;; Update layout-surface function
-    (when (or x y)
+    (when (or x y height)
       (setf (frame-parameter (ewb-output-frame output) 'layout-surface)
-            (ewb-output-layout-function x y)))
+            (ewb-output-layout-function (ewb-output-x output)
+                                        (ewb-output-y output)
+                                        (ewb-output-height output))))
 
     ;; Update output frame layout
     (when (or x y width height)
