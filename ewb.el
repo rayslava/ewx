@@ -281,7 +281,7 @@ windows including the minibuffer."
                                   (version . 1)
                                   (id . ,(ewc-object-id layout))))))
 
-(defvar ewb-surface-functions (list #'ewb-buffer-new)
+(defvar ewb-surface-functions (list #'ewb-buffer-init)
   "Abnormal hook. Run if new surface requests a layout.
 Each function is passed surface app-id title pid as arguments
 The function should return nil if it does not handle this surface.")
@@ -339,7 +339,7 @@ The function should return nil if it does not handle this surface.")
         right-fringe-width 0
         vertical-scroll-bar nil))
 
-(defun ewb-buffer-new (surface _app-id title _pid)
+(defun ewb-buffer-init (surface _app-id title _pid)
   (with-current-buffer (generate-new-buffer (format "*X %s*" title))
     (insert "There is only one view of a wayland buffer.")
     (ewb-buffer-mode)
