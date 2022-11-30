@@ -308,9 +308,9 @@ The function should return nil if it does not handle this surface.")
   (cl-assert (and (ewc-object-p surface)
                   (seq-every-p #'natnump (list x y width height))))
 
-  (message "Trying to layout surface id=%s interface=%s"
+  (message "Trying to layout surface id=%s %s %s %s %s"
            (ewc-object-id surface)
-           (ewc-object-interface surface)) ; DEBUG
+           x y width height) ; DEBUG
 
   (ewc-request surface 'layout `((x . ,x) (y . ,y)
                                  (width . ,width) (height . ,height))))
