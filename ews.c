@@ -78,6 +78,7 @@ struct ews_output {
 struct ews_surface {
   struct wl_list link;
   struct ews_server *server;
+  struct wlr_xdg_surface *xdg_surface;
   struct wlr_xdg_toplevel *xdg_toplevel;
   struct wlr_scene_tree *scene_tree;
   struct wl_resource *ewp_surface;
@@ -556,6 +557,8 @@ static void layout_surface(struct ews_surface *surface) {
                                                        surface->xdg_toplevel->base);
     /* For surface_at */
     surface->scene_tree->node.data = surface;
+    /* For popup */
+    surface->xdg_surface->data = surface->scene_tree;
   } else {
     wlr_scene_node_set_enabled(&surface->scene_tree->node, true);
   }
@@ -648,6 +651,7 @@ static void server_new_xdg_surface(struct wl_listener *listener, void *data) {
     calloc(1, sizeof(struct ews_surface));
   wl_list_insert(&server->surfaces, &surface->link);
   surface->server = server;
+  surface->xdg_surface = xdg_surface;
   surface->xdg_toplevel = xdg_surface->toplevel;
 
   /* Create an ewp_surface */
