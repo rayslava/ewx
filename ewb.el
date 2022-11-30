@@ -296,10 +296,33 @@ The function should return nil if it does not handle this surface.")
 ;;; Buffer
 (defvar-local ewb-buffer-surface nil)
 
+(define-derived-mode ewb-buffer-mode nil "X"
+  "Major mode for managing wayland buffers.
+
+\\{ewb-buffer-mode-map}"
+  ;; Seeded from exwm-mode
+  
+  ;; Disallow changing the major-mode
+  (add-hook 'change-major-mode-hook #'kill-buffer nil t)
+  ;; Adapt kill-buffer
+  (add-hook 'kill-buffer-query-functions #'ewb-kill-buffer nil t)
+  ;; TODO: Redirect events when executing keyboard macros.
+  ;; (push `(executing-kbd-macro . ,exwm--kmacro-map)
+  ;;       minor-mode-overriding-map-alist)
+  (setq buffer-read-only t
+        cursor-type nil
+        left-margin-width nil
+        right-margin-width nil
+        left-fringe-width 0
+        right-fringe-width 0
+        vertical-scroll-bar nil))
+
 (defun ewb-buffer-new (surface _app-id title _pid)
-  (with-current-buffer (get-buffer-create (format "*X %s*" title))
+  (with-current-buffer (generate-new-buffer (format "*X %s*" title))
+    (insert "There is only one view of a wayland buffer.")
     (ewb-buffer-mode)
-    (setq ewb-buffer-surface surface)))
+    (setq ewb-buffer-surface surface)
+    (display-buffer (current-buffer))))
 
 ;;; Init
 (defun ewb-start-server ()
