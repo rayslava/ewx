@@ -358,6 +358,21 @@ The function should return nil if it does not handle this surface.")
     (setq ewb-buffer-surface surface)
     (display-buffer (current-buffer))))
 
+;; Hooks:
+;; exwm uses
+;; `window-size-change-functions' sets this argument while
+;; `window-configuration-change-hook' makes the frame selected.
+;; window.c
+;; The change functions run are, in this order:
+;; window-buffer-change-functions
+;; window-size-change-functions (changed body or total size, a window that changed buffer,
+;;                               or was not shown last time
+;; window-selected-change-functions (if window was (de-)selected)
+;; window-state-change-functions (runs for all 3 above)
+;; window-configuration-change-hook (local 4 window that changed buffer, body or total size
+;;                                   or did not appear last time)
+;; window-state-change-hook
+
 ;;; Init
 (defun ewb-start-server ()
   (make-process
