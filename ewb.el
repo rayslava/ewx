@@ -315,11 +315,14 @@ The function should return nil if it does not handle this surface.")
   (ewc-request surface 'layout `((x . ,x) (y . ,y)
                                  (width . ,width) (height . ,height))))
 
+(defun ewb-hide (surface)
+  (ewc-request surface 'hide))
+
 ;;; Buffer
 (defvar-local ewb-buffer-surface nil)
 
-(defun ewb-buffer-layout ()
-  (pcase-let ((`(,left ,top ,right ,bottom) (window-absolute-body-pixel-edges)))
+(defun ewb-buffer-layout (&optional window)
+  (pcase-let ((`(,left ,top ,right ,bottom) (window-absolute-body-pixel-edges window)))
     (message "Update layout %s %s %s %s" left top right bottom)
     
     (funcall (frame-parameter nil 'layout-surface)
@@ -349,7 +352,7 @@ The function should return nil if it does not handle this surface.")
         right-fringe-width 0
         vertical-scroll-bar nil)
 
-  (add-hook 'window-configuration-change-hook #'ewb-buffer-layout nil t))
+  (add-hook 'window-size-change-functions #'ewb-window-layout nil t))
 
 (defun ewb-buffer-init (surface _app-id title _pid)
   (with-current-buffer (generate-new-buffer (format "*X %s*" title))
@@ -372,6 +375,68 @@ The function should return nil if it does not handle this surface.")
 ;; window-configuration-change-hook (local 4 window that changed buffer, body or total size
 ;;                                   or did not appear last time)
 ;; window-state-change-hook
+;; BUT no hook on buffer hide
+
+;; Update strategy:
+;; Not possible with local hooks. But would be simplest.
+;; -> 1h rechercher -> additional data structures & global hook (maybe aided by local hooks?)
+;; List of windows per wl-buffer
+;; List of buffers per frame
+;; global hook window-configuration-change-hook (runs if buffer or size of window changed)
+;;   one time per frame with frame current
+;; OK do hybrid
+;; window-size-change-functions is not the best name but it is
+;; window-configuration-change-hook with window or frame as arg & not
+;; current
+
+(defun ewb-window-layout (window)
+  "Buffer local function for `window-size-change-functions'."
+  ;; Is frame current?
+  (message "Changed win %s %s" window (window-frame window))
+  (push window (alist-get (window-buffer window)
+                          (frame-parameter (window-frame window) 'ewb-next-buffers))))
+
+;; (frame-parameter nil 'ewb-next-buffers)
+;; => ((#<buffer ewb.el> #<window 5103 on ewb.el> #<window 5103 on ewb.el>))
+
+(defvar-local ewb-buffer-windows nil)
+
+;; OK this is buggy fix OR redo?
+;; "simple" Scan? but what about other frames? simple scan all windows?
+(defun ewb-frame-layout (frame)
+  "Global function for `window-size-change-functions'."
+  ;; current & last -> size changed; relayout if car of window list & add to next-last
+  ;; current & not last -> added; add to window list & layout if car of window list & add to next-last
+  ;; not current & last -> removed; hide if car of window list & layout next in list
+  (let ((next (frame-parameter frame 'ewb-next-buffers)))
+    ;; Remove
+    (message "PREV: %s" (frame-parameter frame 'ewb-prev-buffers))
+    (pcase-dolist (`(,buffer . ,windows) (frame-parameter frame 'ewb-prev-buffers))
+      (cond
+       ((not (assoc buffer next))
+        (with-current-buffer buffer
+          (when (member (car ewb-buffer-windows) windows)
+            (ewb-hide ewb-buffer-surface))
+          (message "-buffers %s" ewb-buffer-windows)
+          (setq ewb-buffer-windows (seq-difference ewb-buffer-windows windows))
+          (message "-buffers %s" ewb-buffer-windows)))
+       ((not (equal windows (assoc buffer next)))
+        (setq ewb-buffer-windows (seq-difference ewb-buffer-windows windows)))))
+    ;; Update & add
+    (message "NEXT: %s" next)
+    (pcase-dolist (`(,buffer . ,windows) next)
+      (with-current-buffer buffer
+        (setq windows (nreverse windows))
+        (message "+ buffers %s" ewb-buffer-windows)
+        ;;                                  nconc ?
+        (setq ewb-buffer-windows (seq-uniq (append ewb-buffer-windows windows)))
+        (message "+ buffers %s" ewb-buffer-windows)
+        (message "+ windows %s" windows)
+        (when (member (car ewb-buffer-windows) windows)
+          (ewb-buffer-layout (car ewb-buffer-windows)))))
+    ;; Record
+    (setf (frame-parameter frame 'ewb-prev-buffers) next)
+    (setf (frame-parameter frame 'ewb-next-buffers) nil)))
 
 ;;; Init
 (defun ewb-start-server ()
@@ -425,11 +490,15 @@ The function should return nil if it does not handle this surface.")
 
     (ewc-request (ewc-object-get 1 objects) 'get-registry `((registry . ,(ewc-object-id registry))))))
 
-(defun ewb-init ()
+(defun ewb-init (&optional server-p)
   ;; Make emacs resize pixelwise
   (setq frame-resize-pixelwise t
         window-resize-pixelwise t)
-  (ewb-start-server))
+
+  (add-hook 'window-size-change-functions #'ewb-frame-layout)
+
+  (when server-p                        ; DEBUG
+    (ewb-start-server)))
 
 ;;; TODO:
 ;; - Abstract common pattern: ewc-object-add -> objects & ewc-request with object-id in args
