@@ -331,6 +331,62 @@ The function should return nil if it does not handle this surface.")
              (- right left) (- bottom top)
              t)))
 
+;; Update frame & windows
+;; Uses window-size-change-functions
+;; -> Runs if window changed size or buffer, or was added to frame.
+;;    The global hook runs once per frame with frame as arg.
+;;    The buffer-local hook runs once per window with window as arg.
+;; => The buffer-local hook does not run on window or buffer hide.
+;; Update rule: A ewBuffer can only be shown once!
+;;            & Switch it into focus(ed window) if possible.
+;; A global Alist from ewBuffer to window keeps track of state.
+(defvar ewb-buffers nil "Global Alist from ewBuffer to window.")
+;; It is populated lazily on update but could be seeded early by
+;; ewb-buffer-init.
+;; The different states:
+;; (buffer)  | (buffer window) | (buffer window ...)
+;; Hidden    | Layed out       | Update in progress
+
+;; This update mechanism has many hours (~6) and iterations. Keep it.
+;; It is good :)
+
+(defun ewb-update-window (window)
+  "Record a new or changed WINDOW showing an ewBuffer to `ewb-buffers'.
+Add buffer-local in `ewb-buffer-mode' to  `window-size-change-functions'."
+  (message "Changed win %s" window)     ; DEBUG
+  (push window (alist-get (window-buffer window) ewb-buffers)))
+
+(defun ewb-update-buffer (buffer->windows)
+  "Apply an BUFFER->WINDOWS element from `ewb-buffers' and return
+its current state."
+  (let ((buffer (car buffer->windows))
+        (windows (cdr buffer->windows)))
+    (with-current-buffer buffer
+      ;; Find next window: Either the selected window or the first live window
+      (let ((next (or (car (memq (selected-window) windows))
+                      (seq-find #'window-live-p windows)))
+            done)
+        (message "Next: %s" next)       ; DEBUG
+        (if next
+            (ewb-buffer-layout next)
+          (ewb-hide ewb-buffer-surface))
+
+        (dolist (window windows)
+          (unless (or (eq window next)
+                      (memq window done)
+                      (not (window-live-p window)))
+            (switch-to-next-buffer window)
+            (push window done)))
+
+        (list buffer next)))))
+
+(defun ewb-update-frame (frame)
+  "Update ewBuffers on Frame.
+Add globally to `window-size-change-functions'."
+  (message "Update: %s" ewb-buffers)    ; DEBUG
+  (setq ewb-buffers (mapcar #'ewb-update-buffer ewb-buffers))
+  (message "Updated: %s" ewb-buffers))  ; DEBUG
+
 (define-derived-mode ewb-buffer-mode nil "X"
   "Major mode for managing wayland buffers.
 
@@ -352,7 +408,7 @@ The function should return nil if it does not handle this surface.")
         right-fringe-width 0
         vertical-scroll-bar nil)
 
-  (add-hook 'window-size-change-functions #'ewb-window-layout nil t))
+  (add-hook 'window-size-change-functions #'ewb-update-window nil t))
 
 (defun ewb-buffer-init (surface _app-id title _pid)
   (with-current-buffer (generate-new-buffer (format "*X %s*" title))
@@ -360,83 +416,6 @@ The function should return nil if it does not handle this surface.")
     (ewb-buffer-mode)
     (setq ewb-buffer-surface surface)
     (display-buffer (current-buffer))))
-
-;; Hooks:
-;; exwm uses
-;; `window-size-change-functions' sets this argument while
-;; `window-configuration-change-hook' makes the frame selected.
-;; window.c
-;; The change functions run are, in this order:
-;; window-buffer-change-functions
-;; window-size-change-functions (changed body or total size, a window that changed buffer,
-;;                               or was not shown last time
-;; window-selected-change-functions (if window was (de-)selected)
-;; window-state-change-functions (runs for all 3 above)
-;; window-configuration-change-hook (local 4 window that changed buffer, body or total size
-;;                                   or did not appear last time)
-;; window-state-change-hook
-;; BUT no hook on buffer hide
-
-;; Update strategy:
-;; Not possible with local hooks. But would be simplest.
-;; -> 1h rechercher -> additional data structures & global hook (maybe aided by local hooks?)
-;; List of windows per wl-buffer
-;; List of buffers per frame
-;; global hook window-configuration-change-hook (runs if buffer or size of window changed)
-;;   one time per frame with frame current
-;; OK do hybrid
-;; window-size-change-functions is not the best name but it is
-;; window-configuration-change-hook with window or frame as arg & not
-;; current
-
-(defun ewb-window-layout (window)
-  "Buffer local function for `window-size-change-functions'."
-  ;; Is frame current?
-  (message "Changed win %s %s" window (window-frame window))
-  (push window (alist-get (window-buffer window)
-                          (frame-parameter (window-frame window) 'ewb-next-buffers))))
-
-;; (frame-parameter nil 'ewb-next-buffers)
-;; => ((#<buffer ewb.el> #<window 5103 on ewb.el> #<window 5103 on ewb.el>))
-
-(defvar-local ewb-buffer-windows nil)
-
-;; OK this is buggy fix OR redo?
-;; "simple" Scan? but what about other frames? simple scan all windows?
-(defun ewb-frame-layout (frame)
-  "Global function for `window-size-change-functions'."
-  ;; current & last -> size changed; relayout if car of window list & add to next-last
-  ;; current & not last -> added; add to window list & layout if car of window list & add to next-last
-  ;; not current & last -> removed; hide if car of window list & layout next in list
-  (let ((next (frame-parameter frame 'ewb-next-buffers)))
-    ;; Remove
-    (message "PREV: %s" (frame-parameter frame 'ewb-prev-buffers))
-    (pcase-dolist (`(,buffer . ,windows) (frame-parameter frame 'ewb-prev-buffers))
-      (cond
-       ((not (assoc buffer next))
-        (with-current-buffer buffer
-          (when (member (car ewb-buffer-windows) windows)
-            (ewb-hide ewb-buffer-surface))
-          (message "-buffers %s" ewb-buffer-windows)
-          (setq ewb-buffer-windows (seq-difference ewb-buffer-windows windows))
-          (message "-buffers %s" ewb-buffer-windows)))
-       ((not (equal windows (assoc buffer next)))
-        (setq ewb-buffer-windows (seq-difference ewb-buffer-windows windows)))))
-    ;; Update & add
-    (message "NEXT: %s" next)
-    (pcase-dolist (`(,buffer . ,windows) next)
-      (with-current-buffer buffer
-        (setq windows (nreverse windows))
-        (message "+ buffers %s" ewb-buffer-windows)
-        ;;                                  nconc ?
-        (setq ewb-buffer-windows (seq-uniq (append ewb-buffer-windows windows)))
-        (message "+ buffers %s" ewb-buffer-windows)
-        (message "+ windows %s" windows)
-        (when (member (car ewb-buffer-windows) windows)
-          (ewb-buffer-layout (car ewb-buffer-windows)))))
-    ;; Record
-    (setf (frame-parameter frame 'ewb-prev-buffers) next)
-    (setf (frame-parameter frame 'ewb-next-buffers) nil)))
 
 ;;; Init
 (defun ewb-start-server ()
@@ -495,7 +474,7 @@ The function should return nil if it does not handle this surface.")
   (setq frame-resize-pixelwise t
         window-resize-pixelwise t)
 
-  (add-hook 'window-size-change-functions #'ewb-frame-layout)
+  (add-hook 'window-size-change-functions #'ewb-update-frame)
 
   (when server-p                        ; DEBUG
     (ewb-start-server)))
