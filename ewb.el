@@ -361,30 +361,31 @@ Add buffer-local in `ewb-buffer-mode' to  `window-size-change-functions'."
 its current state."
   (let ((buffer (car buffer->windows))
         (windows (cdr buffer->windows)))
-    (with-current-buffer buffer
-      ;; Find next window: Either the selected window or the first live window
-      (let ((next (or (car (memq (selected-window) windows))
-                      (seq-find #'window-live-p windows)))
-            done)
-        (message "Next: %s" next)       ; DEBUG
-        (if next
-            (ewb-buffer-layout next)
-          (ewb-hide ewb-buffer-surface))
+    (when (buffer-live-p buffer)
+      (with-current-buffer buffer
+        ;; Find next window: Either the selected window or the first live window
+        (let ((next (or (car (memq (selected-window) windows))
+                        (seq-find #'window-live-p windows)))
+              done)
+          (message "Next: %s" next)     ; DEBUG
+          (if next
+              (ewb-buffer-layout next)
+            (ewb-hide ewb-buffer-surface))
 
-        (dolist (window windows)
-          (unless (or (eq window next)
-                      (memq window done)
-                      (not (window-live-p window)))
-            (switch-to-next-buffer window)
-            (push window done)))
+          (dolist (window windows)
+            (unless (or (eq window next)
+                        (memq window done)
+                        (not (window-live-p window)))
+              (switch-to-next-buffer window)
+              (push window done)))
 
-        (list buffer next)))))
+          (list buffer next))))))
 
 (defun ewb-update-frame (frame)
   "Update ewBuffers on Frame.
 Add globally to `window-size-change-functions'."
   (message "Update: %s" ewb-buffers)    ; DEBUG
-  (setq ewb-buffers (mapcar #'ewb-update-buffer ewb-buffers))
+  (setq ewb-buffers (delq nil (mapcar #'ewb-update-buffer ewb-buffers)))
   (message "Updated: %s" ewb-buffers))  ; DEBUG
 
 (define-derived-mode ewb-buffer-mode nil "X"
