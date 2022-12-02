@@ -391,12 +391,17 @@ Add buffer-local in `ewb-buffer-mode' to  `window-size-change-functions'."
 its current state."
   (let ((buffer (car buffer->windows))
         (windows (cdr buffer->windows)))
-    (when (buffer-live-p buffer)
+    (cond
+     ((not windows) buffer->windows)
+     ((buffer-live-p buffer)
       (with-current-buffer buffer
         ;; Find next window: Either the selected window or the first live window
         (let ((next (or (car (memq (selected-window) windows))
                         (seq-find #'window-live-p windows)))
               done)
+          (unless (eq buffer (window-buffer next))
+            (setq next nil))
+          
           (message "Next: %s" next)     ; DEBUG
           (if next
               (ewb-buffer-layout next)
@@ -405,11 +410,12 @@ its current state."
           (dolist (window windows)
             (unless (or (eq window next)
                         (memq window done)
-                        (not (window-live-p window)))
+                        (not (window-live-p window))
+                        (not (eq buffer (window-buffer window))))
               (switch-to-next-buffer window)
               (push window done)))
 
-          (list buffer next))))))
+          (cons buffer (when next (list next)))))))))
 
 (defun ewb-update-frame (frame)
   "Update ewBuffers on Frame.
