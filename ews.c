@@ -616,7 +616,10 @@ static void ewp_surface_handle_focus(struct wl_client *client, struct wl_resourc
 }
 
 static void ewp_surface_handle_client_destroy(struct wl_client *client, struct wl_resource *resource) {
-  wl_resource_destroy(resource);
+  struct ews_surface *surface = wl_resource_get_user_data(resource);
+  /* TODO: ewp_surface_handle_client_destroy does not quit program that drives the surface */
+  /* It only destroys the surface itself. */
+  wl_signal_emit(&surface->xdg_surface->events.destroy, surface->xdg_surface);
 }
 
 static const struct ewp_surface_interface
