@@ -148,7 +148,7 @@
   (lambda (surface _app-id _title pid)
     (message "Init with pid %s=%s?" pid (emacs-pid))            ; DEBUG
     (when (eql pid (emacs-pid))
-      (message "Init with pid %s!" pid)            ; DEBUG
+      (message "Init with pid %s!" pid) ; DEBUG
       (setf (ewb-output-surface output) surface)
       ;; Try to layout frame. Succeeds when x y width height are already set.
       (ewb-output-layout-frame output)
@@ -267,8 +267,8 @@ windows including the minibuffer."
     (when (or x y width height)
       (ewb-output-layout-frame output))))
 
-;;; Layout
-(defun ewb-init-layout (registry name version _outputs)
+;;; Layout & surface handling
+(defun ewb-layout-init (registry name version _outputs)
   (cl-assert (eql version 1))
   (let ((layout (ewc-object-add :objects (ewc-object-objects registry)
                                 :protocol 'emacs-wayland-protocol
@@ -302,7 +302,7 @@ The function should return nil if it does not handle this surface.")
                                                       )
                                       app-id title pid)))
 
-;;; general layout function
+;;; General layout function
 (defun ewb-layout (surface x y width height)
   "Layout a ewp-SURFACE at X Y with WIDTH and HEIGHT."
   (cl-assert (and (ewc-object-p surface)
@@ -322,6 +322,7 @@ The function should return nil if it does not handle this surface.")
 (defvar-local ewb-buffer-surface nil)
 
 (defun ewb-buffer-layout (&optional window)
+  "Layout current ewBuffer on current window or WINDOW."
   (pcase-let ((`(,left ,top ,right ,bottom) (window-absolute-body-pixel-edges window)))
     (message "Update layout %s %s %s %s" left top right bottom)
     
@@ -434,8 +435,8 @@ Add globally to `window-size-change-functions'."
                                         nil t)
                  ;; (setf (process-filter proc) #'internal-default-process-filter)
                  (ewb-start-client (match-string 1)))))))
-;; set WAYLAND_DISPLAY inside emacs instead of arg
 
+;; Set WAYLAND_DISPLAY inside emacs instead of arg
 (defun ewb-start-client (socket)
   (let* ((objects (ewc-connect
                    (ewc-read ("~/s/wayland/ref/wayland/protocol/wayland.xml"
@@ -466,7 +467,7 @@ Add globally to `window-size-change-functions'."
                                               (ewb-output-xdg-manager registry name version)))
               ("wl_output" (push (ewb-output-new registry outputs name version)
                                  (ewb-outputs-list outputs)))
-              ("ewp_layout" (ewb-init-layout registry name version outputs)))))
+              ("ewp_layout" (ewb-layout-init registry name version outputs)))))
 
     (ewc-request (ewc-object-get 1 objects) 'get-registry `((registry . ,(ewc-object-id registry))))))
 
