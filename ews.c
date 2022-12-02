@@ -89,6 +89,7 @@ struct ews_surface {
   struct wl_listener destroy;
   struct wl_listener request_maximize;
   struct wl_listener request_fullscreen;
+  struct wl_listener set_title;
 };
 
 struct ews_keyboard {
@@ -547,6 +548,7 @@ static void ewp_surface_destroy(struct wl_resource *resource) {
   wl_list_remove(&surface->destroy.link);
   wl_list_remove(&surface->request_maximize.link);
   wl_list_remove(&surface->request_fullscreen.link);
+  wl_list_remove(&surface->set_title.link);
 
   free(surface);
 }
@@ -575,7 +577,13 @@ static void xdg_toplevel_request_fullscreen(struct wl_listener *listener, void *
   wlr_xdg_surface_schedule_configure(surface->xdg_toplevel->base);
 }
 
+static void xdg_toplevel_set_title(struct wl_listener *listener, void *data) {
+  /* Does this have to send a configure event too? */
+  struct ews_surface *surface =
+    wl_container_of(listener, surface, set_title);
 
+  ewp_surface_send_update_title(surface->ewp_surface, surface->xdg_toplevel->title);
+}
 
 static void ewp_surface_handle_layout(struct wl_client *client, struct wl_resource *resource,
                                       uint32_t x, uint32_t y,
@@ -618,7 +626,6 @@ ewp_surface_implementation = {
   .focus = ewp_surface_handle_focus,
   .destroy = ewp_surface_handle_client_destroy,
 };
-/* TODO: 2 events destroy & update_title */
 
 static void server_new_xdg_surface(struct wl_listener *listener, void *data) {
   /* This event is raised when wlr_xdg_shell receives a new xdg surface from a
@@ -695,6 +702,9 @@ static void server_new_xdg_surface(struct wl_listener *listener, void *data) {
   surface->request_fullscreen.notify = xdg_toplevel_request_fullscreen;
   wl_signal_add(&toplevel->events.request_fullscreen,
                 &surface->request_fullscreen);
+  surface->set_title.notify = xdg_toplevel_set_title;
+  wl_signal_add(&toplevel->events.set_title,
+                &surface->set_title);
 }
 
 struct ewp_layout { 
