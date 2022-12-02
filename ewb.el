@@ -473,6 +473,17 @@ Add buffer-local to `window-selection-change-functions'."
     (setf (ewc-object-data surface) (current-buffer))
     (pop-to-buffer-same-window (current-buffer))))
 
+;;; "Floating"
+;; Hack for talk
+
+(defun ewb-buffer-float (buffer x y width height)
+  (when-let ((window (car (alist-get buffer ewb-buffers))))
+    (switch-to-next-buffer window))
+  (redisplay)
+  (with-current-buffer buffer
+    (funcall (frame-parameter nil 'layout-surface)
+             ewb-buffer-surface x y width height t)))
+
 ;;; Init
 (defun ewb-start-server ()
   (make-process
