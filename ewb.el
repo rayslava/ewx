@@ -417,7 +417,7 @@ Add globally to `window-size-change-functions'."
     (insert "There is only one view of a wayland buffer.")
     (ewb-buffer-mode)
     (setq ewb-buffer-surface surface)
-    (display-buffer (current-buffer))))
+    (pop-to-buffer-same-window (current-buffer))))
 
 ;;; Init
 (defun ewb-start-server ()
