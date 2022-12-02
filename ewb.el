@@ -150,6 +150,9 @@
     (when (eql pid (emacs-pid))
       (message "Init with pid %s!" pid) ; DEBUG
       (setf (ewb-output-surface output) surface)
+      ;; frame-parameter is used by ewb-buffer-focus
+      ;; TODO: Use frame-parameters for output handling?
+      (setf (frame-parameter (ewb-output-frame output) 'ewb-surface) surface)
       ;; Try to layout frame. Succeeds when x y width height are already set.
       (ewb-output-layout-frame output)
       t)))
@@ -281,6 +284,32 @@ windows including the minibuffer."
                                   (version . 1)
                                   (id . ,(ewc-object-id layout))))))
 
+(defun ewb-surface-destroy (surface _args)
+  (let ((buffer (ewc-object-data surface)))
+    (when (and buffer
+               (buffer-live-p buffer))
+      (with-current-buffer buffer
+        (setq ewb-buffer-surface nil)
+        (kill-buffer)))))
+
+(defun ewb-surface-update-title (surface args)
+  (when-let ((title (alist-get 'title args))
+             (buffer (ewc-object-data surface)))
+    (with-current-buffer buffer
+      (rename-buffer (format "*X %s*" title) 'unique))))
+
+(defun ewb-surface-focus (surface _args)
+  (when-let ((buffer (ewc-object-data surface)))
+    (select-window (car (alist-get buffer ewb-buffers)))))
+
+(defun ewb-surface-init (objects)
+  (setf (ewc-listener-global objects 'emacs-wayland-protocol 'ewp-surface 'destroy)
+        #'ewb-surface-destroy)
+  (setf (ewc-listener-global objects 'emacs-wayland-protocol 'ewp-surface 'update-title)
+        #'ewb-surface-update-title)
+  (setf (ewc-listener-global objects 'emacs-wayland-protocol 'ewp-surface 'focus)
+        #'ewb-surface-focus))
+
 (defvar ewb-surface-functions (list #'ewb-buffer-init)
   "Abnormal hook. Run if new surface requests a layout.
 Each function is passed surface app-id title pid as arguments
@@ -389,6 +418,23 @@ Add globally to `window-size-change-functions'."
   (setq ewb-buffers (delq nil (mapcar #'ewb-update-buffer ewb-buffers)))
   (message "Updated: %s" ewb-buffers))  ; DEBUG
 
+(defun ewb-buffer-kill ()
+  "Destroy `ewb-buffer-surface' before killing a ewBuffer.
+Add to `kill-buffer-query-functions'."
+  (when ewb-buffer-surface
+    (ewc-request ewb-buffer-surface 'destroy))
+  t)
+
+(defun ewb-buffer-focus (window)
+  "Handle focus for a WINDOW showing a `ewb-buffer-surface'.
+Add buffer-local to `window-selection-change-functions'."
+  (if (eq window (selected-window))
+      ;; Focus
+      (with-current-buffer (window-buffer window)
+        (ewc-request ewb-buffer-surface 'focus))
+    ;; Defocus
+    (ewc-request (frame-parameter (window-frame window) 'ewb-surface) 'focus)))
+
 (define-derived-mode ewb-buffer-mode nil "X"
   "Major mode for managing wayland buffers.
 
@@ -398,7 +444,7 @@ Add globally to `window-size-change-functions'."
   ;; Disallow changing the major-mode
   (add-hook 'change-major-mode-hook #'kill-buffer nil t)
   ;; Adapt kill-buffer
-  (add-hook 'kill-buffer-query-functions #'ewb-kill-buffer nil t)
+  (add-hook 'kill-buffer-query-functions #'ewb-buffer-kill nil t)
   ;; TODO: Redirect events when executing keyboard macros.
   ;; (push `(executing-kbd-macro . ,exwm--kmacro-map)
   ;;       minor-mode-overriding-map-alist)
@@ -410,13 +456,15 @@ Add globally to `window-size-change-functions'."
         right-fringe-width 0
         vertical-scroll-bar nil)
 
-  (add-hook 'window-size-change-functions #'ewb-update-window nil t))
+  (add-hook 'window-size-change-functions #'ewb-update-window nil t)
+  (add-hook 'window-selection-change-functions #'ewb-buffer-focus nil t))
 
 (defun ewb-buffer-init (surface _app-id title _pid)
   (with-current-buffer (generate-new-buffer (format "*X %s*" title))
     (insert "There is only one view of a wayland buffer.")
     (ewb-buffer-mode)
     (setq ewb-buffer-surface surface)
+    (setf (ewc-object-data surface) (current-buffer))
     (pop-to-buffer-same-window (current-buffer))))
 
 ;;; Init
@@ -455,6 +503,7 @@ Add globally to `window-size-change-functions'."
     ;; TODO: Move outputs to var? Less encapsulation is  more emacsy.
     
     (ewb-output-init objects)
+    (ewb-surface-init objects)
     
     ;; Add global listener
     (setf (ewc-listener registry 'global)
