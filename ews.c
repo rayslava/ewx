@@ -497,11 +497,33 @@ static void server_new_output(struct wl_listener *listener, void *data) {
   wlr_output_layout_add_auto(server->output_layout, wlr_output);
 }
 
+static void layout_surface(struct ews_surface *surface) {
+  /* Add scene_tree for surface if missing */
+  if (surface->scene_tree == NULL) {
+    surface->scene_tree = wlr_scene_xdg_surface_create(&surface->server->scene->tree,
+                                                       surface->xdg_toplevel->base);
+    /* For surface_at */
+    surface->scene_tree->node.data = surface;
+    /* For popup */
+    surface->xdg_surface->data = surface->scene_tree;
+  } else {
+    wlr_scene_node_set_enabled(&surface->scene_tree->node, true);
+  }
+
+  wlr_xdg_toplevel_set_size(surface->xdg_toplevel, surface->width, surface->height);
+  wlr_scene_node_set_position(&surface->scene_tree->node, surface->x, surface->y);
+}
+
 static void xdg_toplevel_map(struct wl_listener *listener, void *data) {
   /* Called when the surface is mapped, or ready to display on-screen. */
   struct ews_surface *surface = wl_container_of(listener, surface, map);
   
   surface->mapped = true;
+  
+  if (surface->width != 0
+      && surface->height != 0) {
+    layout_surface(surface);
+  }
 }
 
 static void xdg_toplevel_unmap(struct wl_listener *listener, void *data) {
@@ -550,22 +572,7 @@ static void xdg_toplevel_request_fullscreen(struct wl_listener *listener, void *
   wlr_xdg_surface_schedule_configure(surface->xdg_toplevel->base);
 }
 
-static void layout_surface(struct ews_surface *surface) {
-  /* Add scene_tree for surface if missing */
-  if (surface->scene_tree == NULL) {
-    surface->scene_tree = wlr_scene_xdg_surface_create(&surface->server->scene->tree,
-                                                       surface->xdg_toplevel->base);
-    /* For surface_at */
-    surface->scene_tree->node.data = surface;
-    /* For popup */
-    surface->xdg_surface->data = surface->scene_tree;
-  } else {
-    wlr_scene_node_set_enabled(&surface->scene_tree->node, true);
-  }
 
-  wlr_xdg_toplevel_set_size(surface->xdg_toplevel, surface->width, surface->height);
-  wlr_scene_node_set_position(&surface->scene_tree->node, surface->x, surface->y);
-}
 
 static void ewp_surface_handle_layout(struct wl_client *client, struct wl_resource *resource,
                                       uint32_t x, uint32_t y,
