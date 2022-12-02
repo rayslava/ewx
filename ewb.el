@@ -477,17 +477,15 @@ Add buffer-local to `window-selection-change-functions'."
 (defun ewb-start-server ()
   (make-process
    :name "emacs-wayland-server"
-   :buffer "*emacs-wayland-server*"
+   :buffer " *emacs-wayland-server*"
    :command (list (expand-file-name "./ews"))
    :filter (lambda (proc str)
-             ;; (message "S: %s" str)
-                                        ; DEBUG
              (with-current-buffer (process-buffer proc)
                (goto-char (point-max))
                (save-excursion (insert str))
                (when (re-search-forward (rx "WAYLAND_DISPLAY=" (group (+ (not control))))
                                         nil t)
-                 ;; (setf (process-filter proc) #'internal-default-process-filter)
+                 (setf (process-filter proc) #'ignore)
                  (ewb-start-client (match-string 1)))))))
 
 ;; Set WAYLAND_DISPLAY inside emacs instead of arg
