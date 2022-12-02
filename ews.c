@@ -135,6 +135,9 @@ static void focus_surface(struct ews_surface *ews_surface, struct wlr_surface *s
     wlr_seat_keyboard_notify_enter(seat, ews_surface->xdg_toplevel->base->surface,
                                    keyboard->keycodes, keyboard->num_keycodes, &keyboard->modifiers);
   }
+
+  /* Issue a focus event */
+  ewp_surface_send_focus(ews_surface->ewp_surface);
 }
 
 static void keyboard_handle_modifiers(
@@ -588,10 +591,6 @@ static void ewp_surface_handle_layout(struct wl_client *client, struct wl_resour
   if (surface->mapped) {
       layout_surface(surface);
   }
-  
-  /* focus_surface(ews_surface, surface->xdg_toplevel->base->surface); */
-  /* = Set focus (of seat)? */
-  /* Or do in layout_surface? */
 }
 
 static void ewp_surface_handle_hide(struct wl_client *client, struct wl_resource *resource) {
