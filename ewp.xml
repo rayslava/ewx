@@ -69,6 +69,12 @@
       </description>
     </request>
 
+    <request name="focus">
+      <description summary="Focus surface">
+        Request focus entering this surface.
+      </description>
+    </request>
+
     <request name="destroy" type="destructor">
       <description summary="Destroy request">
         Request destruction of this surface.
@@ -86,6 +92,12 @@
         Inform the client about a new title for this surface.
       </description>
       <arg name="title" type="string" summary="shell title"/>
+    </event>
+
+    <event name="focus">
+      <description summary="Focus surface">
+        Inform the client about focus entering this surface.
+      </description>
     </event>
 
   </interface>
