@@ -600,6 +600,13 @@ static void ewp_surface_handle_hide(struct wl_client *client, struct wl_resource
   }
 }
 
+static void ewp_surface_handle_focus(struct wl_client *client, struct wl_resource *resource) {
+  struct ews_surface *surface = wl_resource_get_user_data(resource);
+  /* No sanity checks oO */
+  /* Surface could be hidden */
+  focus_surface(surface, surface->xdg_toplevel->base->surface);
+}
+
 static void ewp_surface_handle_client_destroy(struct wl_client *client, struct wl_resource *resource) {
   wl_resource_destroy(resource);
 }
@@ -608,6 +615,7 @@ static const struct ewp_surface_interface
 ewp_surface_implementation = {
   .layout = ewp_surface_handle_layout,
   .hide = ewp_surface_handle_hide,
+  .focus = ewp_surface_handle_focus,
   .destroy = ewp_surface_handle_client_destroy,
 };
 /* TODO: 2 events destroy & update_title */
