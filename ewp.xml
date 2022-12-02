@@ -77,7 +77,8 @@
 
     <request name="destroy" type="destructor">
       <description summary="Destroy request">
-        Request destruction of this surface.
+        Request the destruction of this surface.
+        This request is acknowledged by the destroy event.
       </description>
     </request>
 
