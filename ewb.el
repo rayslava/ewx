@@ -463,7 +463,8 @@ Add buffer-local to `window-selection-change-functions'."
         vertical-scroll-bar nil)
 
   (add-hook 'window-size-change-functions #'ewb-update-window nil t)
-  (add-hook 'window-selection-change-functions #'ewb-buffer-focus nil t))
+  ;; (add-hook 'window-selection-change-functions #'ewb-buffer-focus nil t)
+  )
 
 (defun ewb-buffer-init (surface _app-id title _pid)
   (with-current-buffer (generate-new-buffer (format "*X %s*" title))
