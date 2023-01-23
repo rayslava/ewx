@@ -84,7 +84,7 @@ guix shell wlroots wayland-protocols gcc-toolchain make pkg-config -- make CC=gc
 guix shell --manifest=manifest.scm -- make CC=gcc
 guix shell --manifest=../../../manifest.scm -- make CC=gcc
 
-** [ ] 1st protoype
+** [X] 1st protoype
 [2022-10-14 Fri]
 Scope: *Just windows for now! No input handling in emacs.*
 
@@ -253,7 +253,7 @@ mpv --profile=low-latency --untimed /dev/video0
 * OK it's here :) emacs can wayland now                            :blogpost:
 [2022-10-21 Fri]
 
-* [ ] Fang mit der Präsi an, sobald grob fertig, & mach was dafür gebraucht/ mach die rund und halt sie.
+* [X] Fang mit der Präsi an, sobald grob fertig, & mach was dafür gebraucht/ mach die rund und halt sie.
 - Show a little 3d thing inside emacs (a shadertoy?). -> Future
   # future this and emacs windows with wayland as was with x backend, could we ditch gtk?
   # emacs has its own event loop and could draw menus too. A buffer world :)
@@ -358,3 +358,111 @@ https://gitlab.freedesktop.org/wlroots/wlroots/-/issues/3458
             wlr_scene_surface
                 wlr_scene_buffer
 
+* How to implement ewp-surface
+Inspiration from wlr_data_offer.c
+See: wl_data_device_send_data_offer
+
+#+begin_src c
+client = wl_resource_get_client(device_resource)
+
+offer->resource = wl_resource_create(client, &wl_data_offer_interface, version, 0);
+
+wl_resource_set_implementation(offer->resource, &data_offer_impl, offer,
+                               data_offer_handle_resource_destroy);
+
+wl_data_device_send_data_offer(device_resource, offer->resource);
+#+end_src
+
+* Some pointers from EXWM
+exwm--id-buffer-alist 
+  Alist of (<X window ID> . <Emacs buffer>).
+
+exwm-workspace--workareas -> ([0 0 1920 1200]) for one output
+
+exwm-manage--manage-window
+
+exwm-layout--show
+  Show window ID exactly fit in the Emacs window WINDOW.
+
+exwm-workspace--set-fullscreen
+
+* The hooks used by EXWM
+layout 
+  (add-hook 'window-configuration-change-hook #'exwm-layout--refresh)
+  (add-hook 'window-size-change-functions #'exwm-layout--refresh))
+  (add-hook 'minibuffer-setup-hook #'exwm-layout--on-minibuffer-setup t)
+  (add-hook 'echo-area-clear-hook #'exwm-layout--on-echo-area-change)))
+
+input
+  (add-hook 'pre-command-hook #'exwm-input--on-pre-command)
+  (add-hook 'post-command-hook #'exwm-input--on-post-command)
+  (add-hook 'minibuffer-setup-hook #'exwm-input--on-minibuffer-setup)
+  (add-hook 'minibuffer-exit-hook #'exwm-input--on-minibuffer-exit)
+  (add-hook 'echo-area-clear-hook #'exwm-input--on-echo-area-clear)
+  (add-hook 'buffer-list-update-hook #'exwm-input--on-buffer-list-update))
+
+frames
+  (add-hook 'after-make-frame-functions #'exwm-manage--add-frame)
+  (add-hook 'delete-frame-functions #'exwm-manage--remove-frame)
+
+init
+     (setq frame-resize-pixelwise t     ;mandatory; before init
+           window-resize-pixelwise t)
+     ;; Ignore unrecognized command line arguments.  This can be helpful
+     ;; when EXWM is launched by some session manager.
+     (push #'vector command-line-functions)
+     ;; In case EXWM is to be started from a graphical Emacs instance.
+     (add-hook 'window-setup-hook #'exwm-init t)
+     ;; In case EXWM is to be started with emacsclient.
+     (add-hook 'after-make-frame-functions #'exwm-init t)
+     ;; Manage the subordinate Emacs server.
+     (add-hook 'kill-emacs-hook #'exwm--server-stop)
+     (dolist (i exwm-blocking-subrs)
+       (advice-add i :around #'exwm--server-eval-at)
+
+* Window change hooks
+;; The change functions run are, in this order:
+
+(add-hook 'window-buffer-change-functions
+          (lambda (&optional x) (message "window-buffer-change-functions %s" x))
+          nil t)
+(add-hook 'window-size-change-functions
+          (lambda (&optional x) (message "window-size-change-functions %s" x))
+          nil t)
+(add-hook 'window-selected-change-functions
+          (lambda (&optional x) (message "window-selected-change-functions %s" x))
+          nil t)
+(add-hook 'window-state-change-functions
+          (lambda (&optional x) (message "window-state-change-functions %s" x))
+          nil t)
+(add-hook 'window-configuration-change-hook
+          (lambda (&optional x) (message "window-configuration-change-hook %s" x))
+          nil t)
+(add-hook 'window-state-change-hook
+          (lambda (&optional x) (message "window-state-change-hook %s" x))
+          nil t)
+
+(add-hook 'window-configuration-change-hook
+          (lambda () (message "local @ hook.el"))
+          nil t)
+
+;; new strategy:
+;; window-buffer-change-functions -> after window buffer change: 
+;;       window was created, deleted or assigned another buffer.
+;; window-size-change-functions -> after window size change:
+;;       window was created, assigned another buffer or changed its total or text area size
+(add-hook 'window-buffer-change-functions
+          (lambda (&optional x) (message "window-buffer-change-functions %s" x))
+          nil t)
+(add-hook 'window-size-change-functions
+          (lambda (&optional x) (message "window-size-change-functions %s" x))
+          nil t)
+(add-hook 'window-size-change-functions
+          (lambda (&optional x) (message "global size-changes"))
+          )
+
+(current-window)
+
+(add-hook 'window-selection-change-functions
+          (lambda (&optional x) (message "%s selected? %s" x (selected-window)))
+          nil t)
