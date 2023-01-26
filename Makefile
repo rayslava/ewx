@@ -30,20 +30,20 @@ ews: ews.c ewp-protocol.c ewp-protocol.h xdg-shell-protocol.h
 		$(LIBS)
 
 ewc.elc: ewc.el
-ewb.elc: ewb.el ewc.elc ewp.xml
-ewb-test.el: ewb.elc
+ewl.elc: ewl.el ewc.elc ewp.xml
+ewl-test.el: ewl.elc
 
-compile: ewc.elc ewb.elc ews
+compile: ewc.elc ewl.elc ews
 
 .SUFFIXES: .el .elc
 .el.elc:
 	$(EMACS) -Q --batch -L . -f batch-byte-compile $<
 
-check: ewb-test.el
+check: ewl-test.el
 	$(EMACS) -Q -L . -l $<
 
 clean:
-	rm -f ewb.elc ewc.elc ews xdg-shell-protocol.h xdg-shell-protocol.c ewp-protocol.h
+	rm -f ewl.elc ewc.elc ews xdg-shell-protocol.h xdg-shell-protocol.c ewp-protocol.h
 
 .DEFAULT_GOAL=compile
 .PHONY: compile check clean

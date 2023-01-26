@@ -251,7 +251,7 @@ Use optional ID for server initiated objects.
    (cdr (alist-get ,event (ewc-object-events ,object)))))
 
 ;; TODO: In flux; Other method to set listener without object
-;;       Needed in ewb for output
+;;       Needed in ewl for output
 ;; cl-defmethod would be nicer, but how to combine with inline?
 (define-inline ewc-listener-global (objects protocol interface event)
   "Return listener for EVENT of INTERFACE in PROTOCOL used in
@@ -364,7 +364,7 @@ Returns a `ewc-objects' struct with wl-display as object 1."
     registry))
 
 ;; TODO: Is ewc-get-registry used? 
-;; MAYBE: Abstract common pattern, see ewb.el, instead?
+;; MAYBE: Abstract common pattern, see ewl.el, instead?
 
 (provide 'ewc)
 ;;; ewc.el ends here
