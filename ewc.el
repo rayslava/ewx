@@ -22,47 +22,54 @@
 ;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
-;;; Objects -> Commentary:
-;; => [2022-10-20 Thu]
 
-;; OBJECTS
+;; This is a wayland client implementation in elisp.
 
-;; interface -> object
-;; ;; the interface is the blueprint; it becomes alive as an object
+;; If you want to learn more about the wayland protocols, server and
+;; clients have a look at this book: https://wayland-book.com/
 
-;; (object) -> data
-;; (setf (object) data) | (object data)
+;; In short: Wayland is a set of protocols that are implemented by a
+;; server (the wayland compositor) and clients that interact with
+;; the server through the protocols.
 
-;; (ewc-protocol xml . interface) -> (protocol
-;;                                    (interface version ((name ue . listener) ...) ((name opcode le . pe) ...))
-;;                                    ...) ; compiled ; only listener is rw
+;; A wayland protocol is written as xml and defines a set of
+;; interfaces.
+;; The interface can contain events and requests and acts as a
+;; blueprint. It becomes alive as an object in the client (or server).
 
-;; ;; A listener is an event callback.
-;; (setf (ewc-listener protocol interface event) listener)
+;; server -event-> client
+;; client -request-> server
 
-;; (ewc-object protocol interface) -> #s(ewc-object
-;;                                       protocol
-;;                                       interface
-;;                                       id ; add new object to ewc-objects -> id
-;;                                       data     ; only rw field
-;;                                       ((name ue . listener) ...) ; shared ; set by name
-;;                                       ((name opcode le . pe) ...) ; shared ; looked up by name
-;;                                       )
+;; ewc-read tranlates the xml protocol into elisp:
+;; (ewc-read "protocol-1.xml"            -> (...
+;;           ("protocol-2.xml"               (protocol-2
+;;            interface-1 interface-3))       (interface-1
+;;                                             version                  
+;;                                             ((event proc . listener) ...)
+;;                                             ((request . proc) ...))))
 
-;; (ewc-request object request . (named args)) -> id & opcode & pe -> msg
+;; objects are implemented as ewc-object struct with:
+;;   protocol and interface name
+;;   numeric id and data slot
+;;   they also link to their events, requests and the global objects
 
-;; (ewc-event str) -> id & opcode -> lookup object -> ue & listener -> (listener object msg)
+;; (ewc-object-data object) -> data
+;; (setf (ewc-object-data object) data)
 
-;; Seems sound: short & concise :)
+;; The global objects, the state of the wayland client, are kept in
+;; an ewc-objects struct together with the protocols.
 
-;; Things:
-;; protocols, objects, wayland wire messages, helper
+;; New objects are added wiht ewc-object-add.
 
-;; Objects created from the same protocols share the same listeners.
-;; ewc-objects is the runtime struct that contains
-;; - the list of objects
-;; - the next new-id
-;; - the protocols in use
+;; A listener is an event callback:
+;; (setf (ewc-listener object event) listener)
+
+;; A request is issued with:
+;; (ewc-request object request . arguments)
+
+;; The initial client setup:
+;; (ewc-connect) -> global-objects
+;; (ewc-get-registry global-objects) -> registry-object
 
 ;;; Code:
 (require 'cl-macs)
@@ -80,10 +87,17 @@
 ;; wayland-scanner implemented as a macro. This makes compiling of the
 ;; wayland protocols possible, which is mainly relevant for the
 ;; contained bindat pack and unpack functions.
+;; This needs the bindat shipped since emacs 28.2
+
 ;; Use it this way:
 ;; (defvar wayland-protocols
 ;;   (ewc-read "protocol1.xml"
 ;;             ("protocol2.xml" interface1 interface3)))
+
+;; We use bindat internals
+;; -> bindats state vars need to be defined
+(defvar bindat-raw)
+(defvar bindat-idx)
 
 (defmacro ewc-read (&rest protocol)
   "Read wayland PROTOCOLs from  xml files into elisp.
@@ -95,9 +109,6 @@ This is the elisp version of wayland-scanner."
   ;; (protocol ...)
   `(progn (defvar bindat-idx)
           (list ,@(mapcar #'ewc-read-protocol protocol))))
-
-(defvar bindat-raw)
-(defvar bindat-idx)
 
 (define-inline ewc-node-name (node)
   (inline-quote
@@ -133,8 +144,6 @@ This is the elisp version of wayland-scanner."
   ;; (event ue . listener)
   `(list ',(ewc-node-name event)
          ,(bindat--toplevel 'unpack (mapcan #'ewc-read-arg (dom-by-tag event 'arg)))))
-
-;; mapcan instead of append & mapcar produces loops
 
 (defun ewc-read-request (request opcode)
   (let ((spec (mapcan #'ewc-read-arg (dom-by-tag request 'arg))))
@@ -187,10 +196,10 @@ This is the elisp version of wayland-scanner."
 
 (cl-defstruct (ewc-objects (:constructor ewc-objects-make)
                            (:copier nil))
-  "All objects in the current session.
+  "Keep the current state.
 new-id is the id of the next client initiated object.
-table is a hash table from object id to `ewc-object'.
-protocols is an alist from `ewc-read'."
+table contains the list of `ewc-object's keyed by their id.
+The protocols in use are a alist as returned by `ewc-read'."
   (new-id 0 :type integer)
   (table (make-hash-table) :type hash-table :read-only t)
   (protocols nil :type list :read-only t))
@@ -232,6 +241,8 @@ Use optional ID for server initiated objects.
     (message "Added object id=%s interface=%s" id interface) ; DEBUG
     object))
 
+;; Objects created from the same protocols share the same listeners.
+
 ;; This sets the listener for all objects created from the same protocols.
 ;; define-inline makes ewc-listener usable with setf.
 (define-inline ewc-listener (object event)
@@ -239,7 +250,8 @@ Use optional ID for server initiated objects.
   (inline-quote
    (cdr (alist-get ,event (ewc-object-events ,object)))))
 
-;; TMP testing in ewb for output
+;; TODO: In flux; Other method to set listener without object
+;;       Needed in ewb for output
 ;; cl-defmethod would be nicer, but how to combine with inline?
 (define-inline ewc-listener-global (objects protocol interface event)
   "Return listener for EVENT of INTERFACE in PROTOCOL used in
@@ -264,7 +276,9 @@ OBJECTS a ewc-objects struct."
 Lookup the object id in OBJECTS and dispatch to the events listener."
   (pcase-let*
       ((bindat-idx idx)
-       (bindat-raw str)
+       (bindat-TMP testing in
+;; 
+raw str)
        ((map id opcode _len) (funcall (bindat--type-ue ewc-msg-head)))
        (object (ewc-object-get id objects))
        (`(,_event ,ue . ,listener) (nth opcode (ewc-object-events object))))
@@ -348,6 +362,7 @@ Returns a `ewc-objects' struct with wl-display as object 1."
     ;; Issue the request
     (ewc-request (ewc-object-get 1 objects) 'get-registry `((registry . ,(ewc-object-id registry))))
     registry))
+
 ;; TODO: Is ewc-get-registry used? 
 ;; MAYBE: Abstract common pattern, see ewb.el, instead?
 

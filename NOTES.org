@@ -466,3 +466,36 @@ init
 (add-hook 'window-selection-change-functions
           (lambda (&optional x) (message "%s selected? %s" x (selected-window)))
           nil t)
+
+* ewc interface -> object scetch
+[2022-10-20 Thu]
+
+OBJECTS
+
+interface -> object
+;; the interface is the blueprint; it becomes alive as an object
+
+(object) -> data
+(setf (object) data) | (object data)
+
+(ewc-protocol xml . interface) -> (protocol
+                                   (interface version ((name ue . listener) ...) ((name opcode le . pe) ...))
+                                   ...) ; compiled ; only listener is rw
+
+;; A listener is an event callback.
+(setf (ewc-listener protocol interface event) listener)
+
+(ewc-object protocol interface) -> #s(ewc-object
+                                      protocol
+                                      interface
+                                      id ; add new object to ewc-objects -> id
+                                      data     ; only rw field
+                                      ((name ue . listener) ...) ; shared ; set by name
+                                      ((name opcode le . pe) ...) ; shared ; looked up by name
+                                      )
+
+(ewc-request object request . (named args)) -> id & opcode & pe -> msg
+
+(ewc-event str) -> id & opcode -> lookup object -> ue & listener -> (listener object msg)
+
+Seems sound: short & concise :)
