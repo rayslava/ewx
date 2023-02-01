@@ -5,7 +5,7 @@
 ~% git clone https://perma-curious/ewx.git~
 
 *This is a demo & not ready for serious usage!*
-# But I am planning to.
+# But I am planning to use it ;)
 
 # Have a look at this short talk I gave at EmacsConf22:
 #+begin_export html
@@ -22,8 +22,11 @@
 Most wayland compositors have the window manager inside the core. This
 uses a minimal wayland server that talks to Emacs instead. Wayland is
 all about talking and you can just extend it with your own protocols.
-This is what I did. Check it out: ewp.xml
-I got the idea from [[https://github.com/riverwm/river]].
+This is  what I did.
+
+Check it out @ ewp.xml
+
+I got the idea from [[https://github.com/riverwm/river]]
 
 * YEAH BUT WHY?
 1. Show anything that can do a wayland surface inside Emacs
@@ -33,7 +36,6 @@ I got the idea from [[https://github.com/riverwm/river]].
 * QUESTIONS & FEEDBACK
 I would appreciate your opinion & design feedback:
 
-# Keep line-breaks
 1. Think of a more poetic name?\\
    I like the description of the different parts: ew*\\
    But * is tricky and there is already eww.
@@ -43,102 +45,49 @@ I would appreciate your opinion & design feedback:
 3. How to embed wayland widgets?\\
    I have not researched this yet. But I think there needs to be some
    support in Emacs core. Xwidgets are there at least.\\
-   Is there maybe a more coherent story for embedding in emacs?
+   Maybe there is a more coherent story for embedding in emacs?
+   - (CURRENT STATE: nested rectangles\\
+                     windows inside a frame | windows show a buffer |\\
+                     a buffer is mostly unicode BUT also pictures & widgets)\\
+4. Wayland is done by C people. Can we do an even more lispy wayland client?
 
-   (CURRENT STATE: nested rectangles\\
-                   windows inside a frame | windows show a buffer |\\
-                   a buffer is mostly unicode BUT also pictures & widgets)\\
-4. Wayland is done by C people. Can we do a more lispy wayland client?
+Patches, ideas, whatever: perma-curious@posteo.de 
 
-Patches, ideas, whatever: perma-curious@posteo.de
 If your message should be part of the public discussion please tell me.
 
 * HOW TO DEMO?
+1. Adapt the path in ewl.el ewl-start-client for the wayland and
+   xdg-output-unstable-v1 protocols for your system. 
+   - wayland.xml is part of the main wayland repository
+   - xdg-output-unstable-v1.xml is part of the wayland-protocols
+2. If you run guix then good for you and you can just: \\
+   % guix shell --manifest=manifest.scm -- make check \\
+   This should run ewx nested under your current window manager. \\
+   Otherwise you have to install the dependencies on your own.
 
 * REFERENCES
 - Trailblazers
   - https://github.com/ch11ng/exwm
   - https://github.com/ch11ng/xelb
 - Wayland
-  - https://wayland-book.com/
-  - https://wayland.freedesktop.org/
-  - https://github.com/swaywm/wlroots/
+  - https://wayland-book.com
+  - https://wayland.freedesktop.org
+  - https://github.com/swaywm/wlroots
   - https://github.com/Hjdskes/cage
   - https://github.com/riverwm/river
 - Also
   - https://github.com/stumpwm/mahogany
   - https://git.sr.ht/~shunter/wayflan
-  - https://github.com/swaywm/sway/
+  - https://github.com/swaywm/sway
   
 * NEXT | WHERE COULD THIS LEAD?
-FLESH OUT
-Emacs display engine does the composition (How? Does STEPS help?)
-Provides a wayland server for other applications to hook into.
+
+Emacs display engine does the composition (How? Does STEPS help?).
+It provides a wayland server for other applications to hook into.
 
 -> WinWin 
    - Emacs stays independent, becomes more powerfull
    - and it can be expected that many things learn speaking wayland
      eventually. So emacs can incorporate (/shell) them.
-   - Acutal major window manager / wayland helper code could stay a
+   - Actual major window manager / wayland helper code could stay a
      plugin based on wlroots?
-
-* NOTES
----
-You can add your own protocol to wayland. That is just what I did here: ewp.xml
-Makefile
-
-https://news.ycombinator.com/item?id=33849556
-
-Yeah but why? = 
-1. Show anything that can do wayland surface in Emacs.
----
-
-This code is shipped fast.
-
-Do not expect usefullness. XXXXor other
-
-git clone LINK
-
-have a look, there is some documentation, not all still relevant, some scratch
-
-setup like this ...
-
-Two questions:
-1. How to do Input handling? Short description.
-2. Name
-3. How to embedd?
-   How to do Wayland widget?
-   Is there a more coherent story for embedding in emacs?
-   (CURRENT STATE: windows inside a frame | windows show a buffer | a buffer is mostly unicode BUT also pictures & widgets)
-4. Wayland is done by C people. Can we do a more lispy client?
-
-
-Patches, ideas, whatever: perma-curious@posteo.de
-If your message should be part of the public discussion please tell me.
-
-
-NEXT?
-Emacs display engine does the composition (How? Does STEPS help?)
-Provides a wayland server for other applications to hook into.
-
--> WinWin 
-   - Emacs stays independent, becomes more powerfull
-   - and it can be expected that many things learn speaking wayland
-     eventually. So emacs can incorporate (/shell) them.
-   - Acutal major window manager / wayland helper code could stay a
-     plugin based on wlroots?
-
-Techdemo:
-  /Picture in picture video/
-TODO: CODE
-
-list refs?
-
-* TODO:
-** [ ] ews :: Wayland Server in C
-** [X] ewc :: Wayland Client in Elisp
-CLOSED: [2023-01-24 Tue 17:08]
-** [ ] ewp :: Wayland Protocol
-** [ ] ewl :: Wayland buffers
-- [ ] Change wayland.xml path
-** [ ] Mail?
