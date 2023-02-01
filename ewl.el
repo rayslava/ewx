@@ -55,6 +55,10 @@
 
 ;; Future output handling ...
 
+
+;; NEXT: Go over rest and frohlocke ;)
+---
+
 ;; emacs wayland buffer
 
 ;; outputs
@@ -95,29 +99,13 @@
 
 ;; Output size change -> relayout linked frame
 
-;; (window-body-pixel-edges)
-;; => (8 0 952 1150)
-
-;;; Research:
-
-;; (make-frame)
-;; Before creating the frame (via ‘frame-creation-function’), this
-;; function runs the hook ‘before-make-frame-hook’.  After creating
-;; the frame, it runs the hook ‘after-make-frame-functions’ with one
-;; argument, the newly created frame.
-
-;; If a display parameter is supplied and a window-system is not,
-;; guess the window-system from the display.
-
-;; (frame-list)
-;; => (#<frame ewl.el - GNU Emacs at muh 0xf869b8>)
-
 ;;; Code:
 (require 'ewc)
 (require 'xdg)
 
 ;;; Helper
 (defun add-onetime-hook (hook function)
+  "Add FUNCTION to HOOK and remove it after being called once."
   (letrec ((wrapper (lambda (&rest args)
                       (let ((res (apply function args)))
                         (when res
@@ -517,7 +505,7 @@ Add buffer-local to `window-selection-change-functions'."
         vertical-scroll-bar nil)
 
   (add-hook 'window-size-change-functions #'ewl-update-window nil t)
-  ;; (add-hook 'window-selection-change-functions #'ewl-buffer-focus nil t)
+  ;; (add-hook 'window-selection-change-functions #'ewl-buffer-focus nil t) TODO: Waiting for input handling
   )
 
 (defun ewl-buffer-init (surface _app-id title _pid)
@@ -557,6 +545,7 @@ Add buffer-local to `window-selection-change-functions'."
 ;; Set WAYLAND_DISPLAY inside emacs instead of arg
 (defun ewl-start-client (socket)
   (let* ((objects (ewc-connect
+                   ;; XXXX change path
                    (ewc-read ("~/s/wayland/ref/wayland/protocol/wayland.xml"
                               wl-display wl-registry wl-output)
                              ;; TODO: Use pkg-config?
