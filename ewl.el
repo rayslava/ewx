@@ -22,6 +22,39 @@
 ;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
+
+;; Emacs wayland layout integrates wayland surfaces with Emacs.
+
+;; This is accomplished by implementing the Emacs wayland protocol
+;; as a wayland client.
+
+;; New surface handling:
+;; 1. If a new toplevel surface is created the wayland server issues
+;;    an event.
+;; 2. A new ewp-surface object is added to the client.
+;; 3. The object together with its app-id, title and pid gets passed
+;;    to the ewb-surface-functions.
+;; 4. The first function on this hook that returns non nil does the
+;;    rest of the surface handling.
+;;    The default handler treats the surface as an Emacs buffer.
+
+;; The main mechanism to identify a new surface is its pid.
+
+;; Emacs wayland layout also handles wayland outputs (your monitor)
+;; and decorates them with an Emacs frame each.
+
+;; If a new output is added to the server, Emacs creates a new frame
+;; and layouts it to fill the new output. Additionally a output
+;; local layout function is added as frame parameter.
+
+;; The different roles of wayland surfaces are:
+;;   1. Emacs frame    = a new frame of the main Emacs
+;;   2. Wayland buffer = An arbitrary wayland surface treated as Emacs buffer 
+;;   3. Wayland widget = An arbitrary wayland surface embedded into an Emacs buffer
+;;   The first two are already implemented.
+
+;; Future output handling ...
+
 ;; emacs wayland buffer
 
 ;; outputs
