@@ -99,26 +99,26 @@
 (defvar bindat-raw)
 (defvar bindat-idx)
 
-(defmacro ewc-read (&rest protocol)
-  "Read wayland PROTOCOLs from  xml files into elisp.
+(defmacro ewc-read (&rest protocols)
+  "Read wayland PROTOCOLS from  xml files into elisp.
 Each PROTOCOL is either a path to a wayland xml protocol
 or a list (path interface ...) restricting the interfaces
 read to those specified.
 
+Path should be a string and interface a symbol.
+
 This is the elisp version of wayland-scanner."
   ;; (protocol ...)
   `(progn (defvar bindat-idx)
-          (list ,@(mapcar #'ewc-read-protocol protocol))))
+          (list ,@(mapcar (lambda (protocol)
+                            (apply #'ewc-read-protocol (ensure-list protocol)))
+                          protocols))))
 
 (define-inline ewc-node-name (node)
   (inline-quote
    (intern (string-replace "_" "-" (dom-attr ,node 'name)))))
 
-(defun ewc-read-protocol (protocol &optional select-interfaces)
-  (unless (stringp protocol)
-    (setq select-interfaces (cdr protocol))
-    (setq protocol (car protocol)))
-
+(defun ewc-read-protocol (protocol &rest select-interfaces)
   (let ((protocol (with-current-buffer (find-file-noselect protocol)
                     (libxml-parse-xml-region (point-min) (point-max)))))
     ;; (protocol interface ...)
