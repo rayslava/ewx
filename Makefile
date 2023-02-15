@@ -30,7 +30,7 @@ ews: ews.c ewp-protocol.c ewp-protocol.h xdg-shell-protocol.h
 		$(LIBS)
 
 ewc.elc: ewc.el
-ewl.elc: ewl.el ewc.elc ewp.xml
+ewl.elc: ewl.el ewc.elc ewp.xml ews
 ewl-test.el: ewl.elc
 
 compile: ewc.elc ewl.elc ews
