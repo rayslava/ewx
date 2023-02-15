@@ -459,7 +459,7 @@ its current state."
 
           (cons buffer (when next (list next)))))))))
 
-(defun ewl-update-frame (frame)
+(defun ewl-update-frame (_frame)
   "Update ewluffers on Frame.
 Add globally to `window-size-change-functions'."
   (message "Update: %s" ewl-buffers)    ; DEBUG
