@@ -276,9 +276,7 @@ OBJECTS a ewc-objects struct."
 Lookup the object id in OBJECTS and dispatch to the events listener."
   (pcase-let*
       ((bindat-idx idx)
-       (bindat-TMP testing in
-;; 
-raw str)
+       (bindat-raw str)
        ((map id opcode _len) (funcall (bindat--type-ue ewc-msg-head)))
        (object (ewc-object-get id objects))
        (`(,_event ,ue . ,listener) (nth opcode (ewc-object-events object))))
