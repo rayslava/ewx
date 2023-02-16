@@ -56,14 +56,13 @@ Patches, ideas, whatever: perma-curious@posteo.de
 If your message should be part of the public discussion please tell me.
 
 * HOW TO DEMO?
-1. Adapt the path in ewl.el ewl-start-client for the wayland and
-   xdg-output-unstable-v1 protocols for your system. 
-   - wayland.xml is part of the main wayland repository
-   - xdg-output-unstable-v1.xml is part of the wayland-protocols
-2. If you run guix then good for you and you can just: \\
-   % guix shell --manifest=manifest.scm -- make check \\
-   This should run ewx nested under your current window manager. \\
-   Otherwise you have to install the dependencies on your own.
+If you run guix then good for you and you can just: \\
+% guix shell --manifest=manifest.scm -- make check \\
+This runs ewx nested under your current window manager.
+
+You do not use guix yet? Just install the dependencies listed
+in manifest.scm manually. Afterwards run: \\
+% make check
 
 * REFERENCES
 - Trailblazers

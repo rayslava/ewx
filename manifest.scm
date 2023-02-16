@@ -78,6 +78,7 @@
 
 (packages->manifest (list emacs-next-pgtk
                           wlroots-next
+                          wayland
                           wayland-protocols
                           gnu-make
                           pkg-config

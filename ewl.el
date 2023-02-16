@@ -542,18 +542,42 @@ Add buffer-local to `window-selection-change-functions'."
                  (setf (process-filter proc) #'ignore)
                  (ewl-start-client (match-string 1)))))))
 
+(eval-and-compile
+  (defun ewl-get-protocol (library protocol)
+    "Use pkg-config to get PROTOCOL from LIBRARY."
+    (let ((path (string-trim
+                 (shell-command-to-string
+                  (format "pkg-config --silence-errors --variable=pkgdatadir %s" library)))))
+      (if (string= "" path)
+          (error "pkg-config could not find %s" library)
+        (expand-file-name protocol path)))))
+
+(defmacro ewl-read-protocols (&rest protocols)
+  "Variant of `ewc-read' that uses pkg-config via
+`ewl-get-protocol' to resolve PROTOCOLS.
+
+Each PROTOCOL is either a path to a wayland xml protocol,
+a list (path interface ...) restricting the interfaces read to
+those specified or a list (library protocol interface ...) that
+looks up protocol in library."
+  (cons 'ewc-read
+        (mapcar (lambda (protocol)
+                  (pcase-let ((`(,1st ,2nd . ,rst) (ensure-list protocol)))
+                    (if (stringp 2nd)
+                        (cons (ewl-get-protocol 1st 2nd) rst)
+                      protocol)))
+                protocols)))
+
 ;; Set WAYLAND_DISPLAY inside emacs instead of arg
 (defun ewl-start-client (socket)
   (let* ((objects (ewc-connect
-                   ;; XXXX change path
-                   (ewc-read ("~/s/wayland/ref/wayland/protocol/wayland.xml"
-                              wl-display wl-registry wl-output)
-                             ;; TODO: Use pkg-config?
-                             ;;   pkg-config --variable=pkgdatadir wayland-protocols
-                             ("/gnu/store/4xinswliqgki9sxkffh1gg4fdymca0ph-wayland-protocols-1.26/share/wayland-protocols/unstable/xdg-output/xdg-output-unstable-v1.xml"
-                              zxdg-output-manager-v1 zxdg-output-v1) ; = all interfaces
-                             ("ewp.xml"
-                              ewp-layout ewp-surface))
+                   (ewl-read-protocols
+                    ("wayland-client" "wayland.xml"
+                     wl-display wl-registry wl-output)
+                    ("wayland-protocols" "unstable/xdg-output/xdg-output-unstable-v1.xml"
+                     zxdg-output-manager-v1 zxdg-output-v1) ; = all interfaces
+                    ("ewp.xml"
+                     ewp-layout ewp-surface)) ; = all interfaces
                    (expand-file-name socket (xdg-runtime-dir))))
          (registry (ewc-object-add :objects objects
                                    :protocol 'wayland
