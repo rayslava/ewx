@@ -499,3 +499,86 @@ interface -> object
 (ewc-event str) -> id & opcode -> lookup object -> ue & listener -> (listener object msg)
 
 Seems sound: short & concise :)
+
+* Up and converenced => NEXT Replace EXWM for me
+[2023-02-06 Mon]
+
+* [ ] NEXT UP Input handling
+[2023-02-06 Mon]
+
+*Start with keyboard*
+& keep mouse simple for now (?)
+
+*How does ews handle input?*
+ews does input focus  in /focus_surface/:
+  /wlr_seat_keyboard_notify_enter/
+  makes wlroot send key events to the appropriate client
+  (without additional work on your part)
+
+There are also *listeners for keyboard events*:
+- /keyboard_handle_modifiers/
+  Raised when a modifier key, such as shift or alt, pressed.
+  /wlr_seat_keyboard_notify_modifiers/ communicates this to the client.
+    (wlr_keyboard->modifiers)
+- /keyboard_handle_key/ -> wlr_keyboard_key_event -> keycode
+  Raised when a key is pressed or released.
+  /wlr_seat_keyboard_notify_key/ communicates this to the client.
+They seem more appropriate as interception point.
+
+*possible routes*
+
+1) Emacs -ewp> ews
+     Emacs sends keycode & modifiers to ews_surface
+     While receiving all modifiers itself
+     Seems simple but could add delays (That is passing every key through Elisp)
+     Powerfull at same time. = Full input control form Emacs.
+     ? How chatty is wayland with keyevents? wl_keyboard sends key event XXXX
+
+2) ews runs in *direct mode* = sends events directly to surface
+   => Main Emacs is normally in direct mode
+
+3) hybrid: ews sends some events/ modifiers to the selected surface
+   & intersects some to emacs (& emacs can then send them to the surface again)
+   <> Keymap in ews
+
+1 only seems simplest.
+
+** Can interception tools be done in ewx?
+Yes but would need another mechanism than 1.
+
+Sketch:
+Emacs says: Focus this but intercept it like this:
+
+# ~ Patternmachting interface
+# upper case is keysym
+(SPACE & other) -> (RIGHTCTRL & other) = modifier & other
+(SPACE) -> (SPACE) = default
+
+How to do protocol?
+How to do in C?
+
+~ Emacs sends list of keysyms with possible "wildcards" with replacment list.
+  This could implement simulation keys as well
+  
+
+** Simulation keys idea
+Keymap in emacs with function that sends key to buffer surface.
+
+** [ ] Sketch & decide what to implement (first)
+Start with 1
+Direct mode will be special case (maybe for games)
+
+** Look at other protocols
+*** wlroots input-method-unstable-v2.xml
+Also text-input-unstable-v3.xml in wayland-protocols
+
+Input to textboxes?
+Similar to android input handling (that is comes from mobile usecases?)
+
+*** wlr-input-inhibitor-unstable-v1.xml
+Client gets inhibitor and than receives all keypresses.
+Meant for lockscreens.
+~ solution 1
+
+But means normal input handling still needs to be implemented in ews
+
