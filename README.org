@@ -2,7 +2,7 @@
 #+SUBTITLE: This is /the dawn of/ a wayland compositor integrated into emacs.
 #+OPTIONS: toc:nil num:nil
 
-~% git clone https://perma-curious/ewx.git~
+~% git clone http://perma-curious.eu/ewx.git~
 
 *This is a demo & not ready for serious usage!*
 # But I am planning to use it ;)
