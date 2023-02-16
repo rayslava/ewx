@@ -43,7 +43,6 @@
       </description>
       <arg name="id" type="new_id" interface="ewp_surface" summary="The new ewp_surface object"/>
       <arg name="app_id" type="string" summary="shell app id"/>
-      <arg name="title" type="string" summary="shell title"/>
       <arg name="pid" type="uint" summary="pid"/>
     </event>
   </interface>

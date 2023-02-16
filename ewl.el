@@ -32,7 +32,7 @@
 ;; 1. If a new toplevel surface is created the wayland server issues
 ;;    an event.
 ;; 2. A new ewp-surface object is added to the client.
-;; 3. The object together with its app-id, title and pid gets passed
+;; 3. The object together with its app-id and pid gets passed
 ;;    to the ewl-surface-functions.
 ;; 4. The first function on this hook that returns non nil does the
 ;;    rest of the surface handling.
@@ -187,7 +187,7 @@
           (ewl-output-listener event))))
 
 (defun ewl-output-init-surface (output)
-  (lambda (surface _app-id _title pid)
+  (lambda (surface _app-id pid)
     (message "Init with pid %s=%s?" pid (emacs-pid))            ; DEBUG
     (when (eql pid (emacs-pid))
       (message "Init with pid %s!" pid) ; DEBUG
@@ -354,13 +354,13 @@ windows including the minibuffer."
 
 (defvar ewl-surface-functions (list #'ewl-buffer-init)
   "Abnormal hook. Run if new surface requests a layout.
-Each function is passed surface app-id title pid as arguments
+Each function is passed surface, app-id and pid as arguments
 The function should return nil if it does not handle this surface.")
 
 (defun ewl-surface-new (object args)
   (message "New surface: %s" args) ; DEBUG
   
-  (pcase-let (((map id ('app_id app-id) title pid) args))
+  (pcase-let (((map id ('app_id app-id) pid) args))
     ;; handle update-title and destroy events -> do it once in init
 
     ;; add buffer and link to surface
@@ -371,7 +371,7 @@ The function should return nil if it does not handle this surface.")
                                                       :id id
                                                       ;; :data ?
                                                       )
-                                      app-id title pid)))
+                                      app-id pid)))
 
 ;;; General layout function
 (defun ewl-layout (surface x y width height)
@@ -508,8 +508,8 @@ Add buffer-local to `window-selection-change-functions'."
   ;; (add-hook 'window-selection-change-functions #'ewl-buffer-focus nil t) TODO: Waiting for input handling
   )
 
-(defun ewl-buffer-init (surface _app-id title _pid)
-  (with-current-buffer (generate-new-buffer (format "*X %s*" title))
+(defun ewl-buffer-init (surface _app-id _pid)
+  (with-current-buffer (generate-new-buffer "*X X*")
     (insert "There is only one view of a wayland buffer.")
     (ewl-buffer-mode)
     (setq ewl-buffer-surface surface)

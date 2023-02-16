@@ -708,7 +708,6 @@ static void server_new_xdg_surface(struct wl_listener *listener, void *data) {
   ewp_layout_send_new_surface(server->layout_resource,
                               resource, 
                               xdg_surface->toplevel->app_id,
-                              xdg_surface->toplevel->title,
                               pid);
 
   /* Listen to the various events it can emit */
