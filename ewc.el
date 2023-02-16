@@ -45,8 +45,8 @@
 ;;           ("protocol-2.xml"               (protocol-2
 ;;            interface-1 interface-3))       (interface-1
 ;;                                             version                  
-;;                                             ((event proc . listener) ...)
-;;                                             ((request . proc) ...))))
+;;                                             ((event unpack-proc . listener) ...)
+;;                                             ((request length-proc . pack-proc) ...))))
 
 ;; objects are implemented as ewc-object struct with:
 ;;   protocol and interface name
@@ -63,6 +63,10 @@
 
 ;; A listener is an event callback:
 ;; (setf (ewc-listener object event) listener)
+
+;; If an event is received the listener gets called:
+;; (listener object . arguments)
+;; The arguments depend on the event and are received with the event.
 
 ;; A request is issued with:
 ;; (ewc-request object request . arguments)
@@ -147,7 +151,7 @@ This is the elisp version of wayland-scanner."
 
 (defun ewc-read-request (request opcode)
   (let ((spec (mapcan #'ewc-read-arg (dom-by-tag request 'arg))))
-    ;; (request . pe)
+    ;; (request le . pe)
     `(cons ',(ewc-node-name request)
            (cons ,opcode
                  (cons ,(bindat--toplevel 'length spec)
