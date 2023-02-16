@@ -33,7 +33,7 @@
 ;;    an event.
 ;; 2. A new ewp-surface object is added to the client.
 ;; 3. The object together with its app-id, title and pid gets passed
-;;    to the ewb-surface-functions.
+;;    to the ewl-surface-functions.
 ;; 4. The first function on this hook that returns non nil does the
 ;;    rest of the surface handling.
 ;;    The default handler treats the surface as an Emacs buffer.
