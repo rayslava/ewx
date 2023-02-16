@@ -245,7 +245,6 @@ Maybe keytranslation | interception tools style?
 | id opcode -get> listener    | ewc-parse |
 | protocol interface -get> id | ewc-print |
 
-
 * Webcam & mpv
 [2022-10-14 Fri]
 mpv --profile=low-latency --untimed /dev/video0
@@ -303,7 +302,6 @@ handling of keyboard:
    & its a kinda neat and unique wayland feature
      maybe a little useless right now.
      
-
 * Killing ewc kills emacs too -> Thanks GTK again for making this not flexible but brittle
 https://gitlab.gnome.org/GNOME/gtk/-/issues/174
 
@@ -469,6 +467,7 @@ init
 
 * ewc interface -> object scetch
 [2022-10-20 Thu]
+# I rewrote this to ewc commentary.
 
 OBJECTS
 
