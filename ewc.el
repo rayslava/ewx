@@ -212,7 +212,7 @@ The protocols in use are a alist as returned by `ewc-read'."
   "Get object with ID from OBJECTS an `ewc-objects' struct."
   (inline-quote (gethash ,id (ewc-objects-table ,objects))))
 
-(defun ewc-object-add (&rest args)
+(defun ewc-object-add (&rest arguments)
   "Add a new object implementing INTERFACE of PROTOCOL to OBJECTS
 with optional ID or DATA.
 
@@ -226,7 +226,7 @@ Use optional ID for server initiated objects.
 
 \(fn &key OBJECTS PROTOCOL INTERFACE ID DATA)"
   (pcase-let* (((map :objects :protocol :interface :id :data)
-                args)
+                arguments)
                (`(,_version ,events ,requests)
                 (thread-last
                   (ewc-objects-protocols objects)
