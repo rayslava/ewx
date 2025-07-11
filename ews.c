@@ -1,22 +1,22 @@
 /* ews.c --- Emacs wayland server
-  
+
    Copyright (C) 2023  Michael Bauer
 
    Author: Michael Bauer <michael-bauer@posteo.de>
-   
+
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
    the Free Software Foundation, either version 3 of the License, or
    (at your option) any later version.
-   
+
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
-   
+
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-   
+
    Emacs wayland server is based on tinywl.c, a CC0 licensed example
    wayland compositor released as part of the wlroots project. */
 
@@ -24,16 +24,16 @@
 #include <assert.h>
 #include <getopt.h>
 #include <stdbool.h>
-#include <stdlib.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <time.h>
 #include <unistd.h>
 #include <wayland-server-core.h>
 #include <wlr/backend.h>
 #include <wlr/render/allocator.h>
 #include <wlr/render/wlr_renderer.h>
-#include <wlr/types/wlr_cursor.h>
 #include <wlr/types/wlr_compositor.h>
+#include <wlr/types/wlr_cursor.h>
 #include <wlr/types/wlr_data_device.h>
 #include <wlr/types/wlr_input_device.h>
 #include <wlr/types/wlr_keyboard.h>
@@ -42,14 +42,15 @@
 #include <wlr/types/wlr_pointer.h>
 #include <wlr/types/wlr_scene.h>
 #include <wlr/types/wlr_seat.h>
+#include <wlr/types/wlr_server_decoration.h>
 #include <wlr/types/wlr_subcompositor.h>
 #include <wlr/types/wlr_xcursor_manager.h>
+#include <wlr/types/wlr_xdg_decoration_v1.h>
 #include <wlr/types/wlr_xdg_output_v1.h>
 #include <wlr/types/wlr_xdg_shell.h>
-#include <wlr/types/wlr_xdg_decoration_v1.h>
-#include <wlr/types/wlr_server_decoration.h>
 #include <wlr/util/log.h>
 #include <xkbcommon/xkbcommon.h>
+
 #include "ewp-protocol.h"
 
 /* For brevity's sake, struct members are annotated where they are used. */
@@ -124,7 +125,8 @@ struct ews_keyboard {
   struct wl_listener destroy;
 };
 
-static void focus_surface(struct ews_surface *ews_surface, struct wlr_surface *surface) {
+static void focus_surface(struct ews_surface *ews_surface,
+                          struct wlr_surface *surface) {
   /* Note: this function only deals with keyboard focus. */
   if (ews_surface == NULL) {
     return;
@@ -142,7 +144,8 @@ static void focus_surface(struct ews_surface *ews_surface, struct wlr_surface *s
      * it no longer has focus and the client will repaint accordingly, e.g.
      * stop displaying a caret.
      */
-    struct wlr_xdg_surface *previous = wlr_xdg_surface_try_from_wlr_surface(seat->keyboard_state.focused_surface);
+    struct wlr_xdg_surface *previous = wlr_xdg_surface_try_from_wlr_surface(
+        seat->keyboard_state.focused_surface);
     if (previous != NULL) {
       assert(previous->role == WLR_XDG_SURFACE_ROLE_TOPLEVEL);
       wlr_xdg_toplevel_set_activated(previous->toplevel, false);
@@ -157,20 +160,21 @@ static void focus_surface(struct ews_surface *ews_surface, struct wlr_surface *s
    * clients without additional work on your part.
    */
   if (keyboard != NULL) {
-    wlr_seat_keyboard_notify_enter(seat, ews_surface->xdg_toplevel->base->surface,
-                                   keyboard->keycodes, keyboard->num_keycodes, &keyboard->modifiers);
+    wlr_seat_keyboard_notify_enter(
+        seat, ews_surface->xdg_toplevel->base->surface, keyboard->keycodes,
+        keyboard->num_keycodes, &keyboard->modifiers);
   }
 
   /* Issue a focus event */
   ewp_surface_send_focus(ews_surface->ewp_surface);
 }
 
-static void keyboard_handle_modifiers(
-                                      struct wl_listener *listener, void *data) {
+static void keyboard_handle_modifiers(struct wl_listener *listener,
+                                      void *data) {
   /* This event is raised when a modifier key, such as shift or alt, is
    * pressed. We simply communicate this to the client. */
   struct ews_keyboard *keyboard =
-    wl_container_of(listener, keyboard, modifiers);
+      wl_container_of(listener, keyboard, modifiers);
   /*
    * A seat can only have one keyboard, but this is a limitation of the
    * Wayland protocol - not wlroots. We assign all connected keyboards to the
@@ -183,19 +187,17 @@ static void keyboard_handle_modifiers(
                                      &keyboard->wlr_keyboard->modifiers);
 }
 
-static void keyboard_handle_key(
-                                struct wl_listener *listener, void *data) {
+static void keyboard_handle_key(struct wl_listener *listener, void *data) {
   /* This event is raised when a key is pressed or released. */
-  struct ews_keyboard *keyboard =
-    wl_container_of(listener, keyboard, key);
+  struct ews_keyboard *keyboard = wl_container_of(listener, keyboard, key);
   struct ews_server *server = keyboard->server;
   struct wlr_keyboard_key_event *event = data;
   struct wlr_seat *seat = server->seat;
 
   /* Pass it along to the client. */
   wlr_seat_set_keyboard(seat, keyboard->wlr_keyboard);
-  wlr_seat_keyboard_notify_key(seat, event->time_msec,
-                               event->keycode, event->state);
+  wlr_seat_keyboard_notify_key(seat, event->time_msec, event->keycode,
+                               event->state);
 }
 
 static void keyboard_handle_destroy(struct wl_listener *listener, void *data) {
@@ -203,8 +205,7 @@ static void keyboard_handle_destroy(struct wl_listener *listener, void *data) {
    * the destruction of the wlr_keyboard. It will no longer receive events
    * and should be destroyed.
    */
-  struct ews_keyboard *keyboard =
-    wl_container_of(listener, keyboard, destroy);
+  struct ews_keyboard *keyboard = wl_container_of(listener, keyboard, destroy);
   wl_list_remove(&keyboard->modifiers.link);
   wl_list_remove(&keyboard->key.link);
   wl_list_remove(&keyboard->destroy.link);
@@ -216,16 +217,15 @@ static void server_new_keyboard(struct ews_server *server,
                                 struct wlr_input_device *device) {
   struct wlr_keyboard *wlr_keyboard = wlr_keyboard_from_input_device(device);
 
-  struct ews_keyboard *keyboard =
-    calloc(1, sizeof(struct ews_keyboard));
+  struct ews_keyboard *keyboard = calloc(1, sizeof(struct ews_keyboard));
   keyboard->server = server;
   keyboard->wlr_keyboard = wlr_keyboard;
 
   /* We need to prepare an XKB keymap and assign it to the keyboard. This
    * assumes the defaults (e.g. layout = "us"). */
   struct xkb_context *context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
-  struct xkb_keymap *keymap = xkb_keymap_new_from_names(context, NULL,
-                                                        XKB_KEYMAP_COMPILE_NO_FLAGS);
+  struct xkb_keymap *keymap =
+      xkb_keymap_new_from_names(context, NULL, XKB_KEYMAP_COMPILE_NO_FLAGS);
 
   wlr_keyboard_set_keymap(wlr_keyboard, keymap);
   xkb_keymap_unref(keymap);
@@ -258,18 +258,17 @@ static void server_new_pointer(struct ews_server *server,
 static void server_new_input(struct wl_listener *listener, void *data) {
   /* This event is raised by the backend when a new input device becomes
    * available. */
-  struct ews_server *server =
-    wl_container_of(listener, server, new_input);
+  struct ews_server *server = wl_container_of(listener, server, new_input);
   struct wlr_input_device *device = data;
   switch (device->type) {
-  case WLR_INPUT_DEVICE_KEYBOARD:
-    server_new_keyboard(server, device);
-    break;
-  case WLR_INPUT_DEVICE_POINTER:
-    server_new_pointer(server, device);
-    break;
-  default:
-    break;
+    case WLR_INPUT_DEVICE_KEYBOARD:
+      server_new_keyboard(server, device);
+      break;
+    case WLR_INPUT_DEVICE_POINTER:
+      server_new_pointer(server, device);
+      break;
+    default:
+      break;
   }
   /* We need to let the wlr_seat know what our capabilities are, which is
    * communiciated to the client. In Ews we always have a cursor, even if
@@ -282,12 +281,11 @@ static void server_new_input(struct wl_listener *listener, void *data) {
 }
 
 static void seat_request_cursor(struct wl_listener *listener, void *data) {
-  struct ews_server *server = wl_container_of(
-                                                 listener, server, request_cursor);
+  struct ews_server *server = wl_container_of(listener, server, request_cursor);
   /* This event is raised by the seat when a client provides a cursor image */
   struct wlr_seat_pointer_request_set_cursor_event *event = data;
   struct wlr_seat_client *focused_client =
-    server->seat->pointer_state.focused_client;
+      server->seat->pointer_state.focused_client;
   /* This can be sent by any client, so we check to make sure this one is
    * actually has pointer focus first. */
   if (focused_client == event->seat_client) {
@@ -295,35 +293,37 @@ static void seat_request_cursor(struct wl_listener *listener, void *data) {
      * provided surface as the cursor image. It will set the hardware cursor
      * on the output that it's currently on and continue to do so as the
      * cursor moves between outputs. */
-    wlr_cursor_set_surface(server->cursor, event->surface,
-                           event->hotspot_x, event->hotspot_y);
+    wlr_cursor_set_surface(server->cursor, event->surface, event->hotspot_x,
+                           event->hotspot_y);
   }
 }
 
-static void seat_request_set_selection(struct wl_listener *listener, void *data) {
+static void seat_request_set_selection(struct wl_listener *listener,
+                                       void *data) {
   /* This event is raised by the seat when a client wants to set the selection,
    * usually when the user copies something. wlroots allows compositors to
    * ignore such requests if they so choose, but in ews we always honor
    */
-  struct ews_server *server = wl_container_of(
-                                                 listener, server, request_set_selection);
+  struct ews_server *server =
+      wl_container_of(listener, server, request_set_selection);
   struct wlr_seat_request_set_selection_event *event = data;
   wlr_seat_set_selection(server->seat, event->source, event->serial);
 }
 
-static struct ews_surface *surface_at(struct ews_server *server, double lx, double ly,
-                                      struct wlr_surface **surface, double *sx, double *sy) {
+static struct ews_surface *surface_at(struct ews_server *server, double lx,
+                                      double ly, struct wlr_surface **surface,
+                                      double *sx, double *sy) {
   /* This returns the topmost node in the scene at the given layout coords.
    * we only care about surface nodes as we are specifically looking for a
    * surface in the surface tree of a ews_surface. */
-  struct wlr_scene_node *node = wlr_scene_node_at(&server->scene->tree.node,
-                                                  lx, ly, sx, sy);
+  struct wlr_scene_node *node =
+      wlr_scene_node_at(&server->scene->tree.node, lx, ly, sx, sy);
   if (node == NULL || node->type != WLR_SCENE_NODE_BUFFER) {
     return NULL;
   }
   struct wlr_scene_buffer *scene_buffer = wlr_scene_buffer_from_node(node);
   struct wlr_scene_surface *scene_surface =
-    wlr_scene_surface_try_from_buffer(scene_buffer);
+      wlr_scene_surface_try_from_buffer(scene_buffer);
   if (!scene_surface) {
     return NULL;
   }
@@ -343,9 +343,8 @@ static void process_cursor_motion(struct ews_server *server, uint32_t time) {
   double sx, sy;
   struct wlr_seat *seat = server->seat;
   struct wlr_surface *surface = NULL;
-  struct ews_surface *ews_surface = surface_at(server,
-                                               server->cursor->x, server->cursor->y,
-                                               &surface, &sx, &sy);
+  struct ews_surface *ews_surface = surface_at(
+      server, server->cursor->x, server->cursor->y, &surface, &sx, &sy);
   if (!surface) {
     /* If there's no view under the cursor, set the cursor image to a
      * default. This is what makes the cursor image appear when you move it
@@ -376,21 +375,20 @@ static void process_cursor_motion(struct ews_server *server, uint32_t time) {
 static void server_cursor_motion(struct wl_listener *listener, void *data) {
   /* This event is forwarded by the cursor when a pointer emits a _relative_
    * pointer motion event (i.e. a delta) */
-  struct ews_server *server =
-    wl_container_of(listener, server, cursor_motion);
+  struct ews_server *server = wl_container_of(listener, server, cursor_motion);
   struct wlr_pointer_motion_event *event = data;
   /* The cursor doesn't move unless we tell it to. The cursor automatically
    * handles constraining the motion to the output layout, as well as any
    * special configuration applied for the specific input device which
    * generated the event. You can pass NULL for the device if you want to move
    * the cursor around without any input. */
-  wlr_cursor_move(server->cursor, &event->pointer->base,
-                  event->delta_x, event->delta_y);
+  wlr_cursor_move(server->cursor, &event->pointer->base, event->delta_x,
+                  event->delta_y);
   process_cursor_motion(server, event->time_msec);
 }
 
-static void server_cursor_motion_absolute(
-                                          struct wl_listener *listener, void *data) {
+static void server_cursor_motion_absolute(struct wl_listener *listener,
+                                          void *data) {
   /* This event is forwarded by the cursor when a pointer emits an _absolute_
    * motion event, from 0..1 on each axis. This happens, for example, when
    * wlroots is running under a Wayland window rather than KMS+DRM, and you
@@ -398,7 +396,7 @@ static void server_cursor_motion_absolute(
    * so we have to warp the mouse there. There is also some hardware which
    * emits these events. */
   struct ews_server *server =
-    wl_container_of(listener, server, cursor_motion_absolute);
+      wl_container_of(listener, server, cursor_motion_absolute);
   struct wlr_pointer_motion_absolute_event *event = data;
   wlr_cursor_warp_absolute(server->cursor, &event->pointer->base, event->x,
                            event->y);
@@ -408,17 +406,15 @@ static void server_cursor_motion_absolute(
 static void server_cursor_button(struct wl_listener *listener, void *data) {
   /* This event is forwarded by the cursor when a pointer emits a button
    * event. */
-  struct ews_server *server =
-    wl_container_of(listener, server, cursor_button);
+  struct ews_server *server = wl_container_of(listener, server, cursor_button);
   struct wlr_pointer_button_event *event = data;
   /* Notify the client with pointer focus that a button press has occurred */
-  wlr_seat_pointer_notify_button(server->seat,
-                                 event->time_msec, event->button, event->state);
+  wlr_seat_pointer_notify_button(server->seat, event->time_msec, event->button,
+                                 event->state);
   double sx, sy;
   struct wlr_surface *surface = NULL;
-  struct ews_surface *ews_surface = surface_at(server,
-                                              server->cursor->x, server->cursor->y,
-                                               &surface, &sx, &sy);
+  struct ews_surface *ews_surface = surface_at(
+      server, server->cursor->x, server->cursor->y, &surface, &sx, &sy);
   if (event->state == WLR_BUTTON_PRESSED) {
     /* Focus client where button was _pressed_ */
     focus_surface(ews_surface, surface);
@@ -428,12 +424,11 @@ static void server_cursor_button(struct wl_listener *listener, void *data) {
 static void server_cursor_axis(struct wl_listener *listener, void *data) {
   /* This event is forwarded by the cursor when a pointer emits an axis event,
    * for example when you move the scroll wheel. */
-  struct ews_server *server =
-    wl_container_of(listener, server, cursor_axis);
+  struct ews_server *server = wl_container_of(listener, server, cursor_axis);
   struct wlr_pointer_axis_event *event = data;
   /* Notify the client with pointer focus of the axis event. */
-  wlr_seat_pointer_notify_axis(server->seat,
-                               event->time_msec, event->orientation, event->delta,
+  wlr_seat_pointer_notify_axis(server->seat, event->time_msec,
+                               event->orientation, event->delta,
                                event->delta_discrete, event->source);
 }
 
@@ -442,8 +437,7 @@ static void server_cursor_frame(struct wl_listener *listener, void *data) {
    * event. Frame events are sent after regular pointer events to group
    * multiple events together. For instance, two axis events may happen at the
    * same time, in which case a frame event won't be sent in between. */
-  struct ews_server *server =
-    wl_container_of(listener, server, cursor_frame);
+  struct ews_server *server = wl_container_of(listener, server, cursor_frame);
   /* Notify the client with pointer focus of the frame event. */
   wlr_seat_pointer_notify_frame(server->seat);
 }
@@ -454,7 +448,8 @@ static void output_frame(struct wl_listener *listener, void *data) {
   struct ews_output *output = wl_container_of(listener, output, frame);
   struct wlr_scene *scene = output->server->scene;
 
-  struct wlr_scene_output *scene_output = wlr_scene_get_scene_output(scene, output->wlr_output);
+  struct wlr_scene_output *scene_output =
+      wlr_scene_get_scene_output(scene, output->wlr_output);
 
   /* Render the scene if needed and commit the output */
   wlr_scene_output_commit(scene_output, NULL);
@@ -476,8 +471,7 @@ static void output_destroy(struct wl_listener *listener, void *data) {
 static void server_new_output(struct wl_listener *listener, void *data) {
   /* This event is raised by the backend when a new output (aka a display or
    * monitor) becomes available. */
-  struct ews_server *server =
-    wl_container_of(listener, server, new_output);
+  struct ews_server *server = wl_container_of(listener, server, new_output);
   struct wlr_output *wlr_output = data;
 
   /* Configures the output created by the backend to use our allocator
@@ -499,8 +493,7 @@ static void server_new_output(struct wl_listener *listener, void *data) {
   }
 
   /* Allocates and configures our state for this output */
-  struct ews_output *output =
-    calloc(1, sizeof(struct ews_output));
+  struct ews_output *output = calloc(1, sizeof(struct ews_output));
   output->wlr_output = wlr_output;
   output->server = server;
   /* Sets up a listener for the frame notify event. */
@@ -528,8 +521,8 @@ static void server_new_output(struct wl_listener *listener, void *data) {
 static void layout_surface(struct ews_surface *surface) {
   /* Add scene_tree for surface if missing */
   if (surface->scene_tree == NULL) {
-    surface->scene_tree = wlr_scene_xdg_surface_create(&surface->server->scene->tree,
-                                                       surface->xdg_toplevel->base);
+    surface->scene_tree = wlr_scene_xdg_surface_create(
+        &surface->server->scene->tree, surface->xdg_toplevel->base);
     /* For surface_at */
     surface->scene_tree->node.data = surface;
     /* For popup */
@@ -538,18 +531,19 @@ static void layout_surface(struct ews_surface *surface) {
     wlr_scene_node_set_enabled(&surface->scene_tree->node, true);
   }
 
-  wlr_xdg_toplevel_set_size(surface->xdg_toplevel, surface->width, surface->height);
-  wlr_scene_node_set_position(&surface->scene_tree->node, surface->x, surface->y);
+  wlr_xdg_toplevel_set_size(surface->xdg_toplevel, surface->width,
+                            surface->height);
+  wlr_scene_node_set_position(&surface->scene_tree->node, surface->x,
+                              surface->y);
 }
 
 static void xdg_toplevel_map(struct wl_listener *listener, void *data) {
   /* Called when the surface is mapped, or ready to display on-screen. */
   struct ews_surface *surface = wl_container_of(listener, surface, map);
-  
+
   surface->mapped = true;
-  
-  if (surface->width != 0
-      && surface->height != 0) {
+
+  if (surface->width != 0 && surface->height != 0) {
     layout_surface(surface);
   }
 }
@@ -583,36 +577,40 @@ static void xdg_toplevel_destroy(struct wl_listener *listener, void *data) {
   wl_resource_destroy(surface->ewp_surface);
 }
 
-static void xdg_toplevel_request_maximize(struct wl_listener *listener, void *data) {
+static void xdg_toplevel_request_maximize(struct wl_listener *listener,
+                                          void *data) {
   /* This event is raised when a client would like to maximize itself,
    * typically because the user clicked on the maximize button on
    * client-side decorations. ews doesn't support maximization, but
    * to conform to xdg-shell protocol we still must send a configure.
    * wlr_xdg_surface_schedule_configure() is used to send an empty reply. */
   struct ews_surface *surface =
-    wl_container_of(listener, surface, request_maximize);
+      wl_container_of(listener, surface, request_maximize);
   wlr_xdg_surface_schedule_configure(surface->xdg_toplevel->base);
 }
 
-static void xdg_toplevel_request_fullscreen(struct wl_listener *listener, void *data) {
+static void xdg_toplevel_request_fullscreen(struct wl_listener *listener,
+                                            void *data) {
   /* Just as with request_maximize, we must send a configure here. */
   struct ews_surface *surface =
-    wl_container_of(listener, surface, request_fullscreen);
+      wl_container_of(listener, surface, request_fullscreen);
   wlr_xdg_surface_schedule_configure(surface->xdg_toplevel->base);
 }
 
 static void xdg_toplevel_set_title(struct wl_listener *listener, void *data) {
   /* Does this have to send a configure event too? */
-  struct ews_surface *surface =
-    wl_container_of(listener, surface, set_title);
+  struct ews_surface *surface = wl_container_of(listener, surface, set_title);
 
-  ewp_surface_send_update_title(surface->ewp_surface, surface->xdg_toplevel->title);
+  ewp_surface_send_update_title(surface->ewp_surface,
+                                surface->xdg_toplevel->title);
 }
 
-static void ewp_surface_handle_layout(struct wl_client *client, struct wl_resource *resource,
-                                      uint32_t x, uint32_t y,
-                                      uint32_t width, uint32_t height) {
-  wlr_log(WLR_DEBUG, "Laying out surface x=%d y=%d width=%d height=%d", x, y, width, height);
+static void ewp_surface_handle_layout(struct wl_client *client,
+                                      struct wl_resource *resource, uint32_t x,
+                                      uint32_t y, uint32_t width,
+                                      uint32_t height) {
+  wlr_log(WLR_DEBUG, "Laying out surface x=%d y=%d width=%d height=%d", x, y,
+          width, height);
 
   struct ews_surface *surface = wl_resource_get_user_data(resource);
 
@@ -621,37 +619,40 @@ static void ewp_surface_handle_layout(struct wl_client *client, struct wl_resour
   surface->width = width;
   surface->height = height;
   if (surface->mapped) {
-      layout_surface(surface);
+    layout_surface(surface);
   }
 }
 
-static void ewp_surface_handle_hide(struct wl_client *client, struct wl_resource *resource) {
+static void ewp_surface_handle_hide(struct wl_client *client,
+                                    struct wl_resource *resource) {
   struct ews_surface *surface = wl_resource_get_user_data(resource);
   if (surface->scene_tree != NULL) {
     wlr_scene_node_set_enabled(&surface->scene_tree->node, false);
   }
 }
 
-static void ewp_surface_handle_focus(struct wl_client *client, struct wl_resource *resource) {
+static void ewp_surface_handle_focus(struct wl_client *client,
+                                     struct wl_resource *resource) {
   struct ews_surface *surface = wl_resource_get_user_data(resource);
   /* No sanity checks oO */
   /* Surface could be hidden */
   focus_surface(surface, surface->xdg_toplevel->base->surface);
 }
 
-static void ewp_surface_handle_client_destroy(struct wl_client *client, struct wl_resource *resource) {
+static void ewp_surface_handle_client_destroy(struct wl_client *client,
+                                              struct wl_resource *resource) {
   struct ews_surface *surface = wl_resource_get_user_data(resource);
-  /* TODO: ewp_surface_handle_client_destroy does not quit program that drives the surface */
+  /* TODO: ewp_surface_handle_client_destroy does not quit program that drives
+   * the surface */
   /* It only destroys the surface itself. */
   wl_signal_emit(&surface->xdg_surface->events.destroy, surface->xdg_surface);
 }
 
-static const struct ewp_surface_interface
-ewp_surface_implementation = {
-  .layout = ewp_surface_handle_layout,
-  .hide = ewp_surface_handle_hide,
-  .focus = ewp_surface_handle_focus,
-  .destroy = ewp_surface_handle_client_destroy,
+static const struct ewp_surface_interface ewp_surface_implementation = {
+    .layout = ewp_surface_handle_layout,
+    .hide = ewp_surface_handle_hide,
+    .focus = ewp_surface_handle_focus,
+    .destroy = ewp_surface_handle_client_destroy,
 };
 
 static void server_new_xdg_surface(struct wl_listener *listener, void *data) {
@@ -666,7 +667,7 @@ static void server_new_xdg_surface(struct wl_listener *listener, void *data) {
    */
 
   struct ews_server *server =
-    wl_container_of(listener, server, new_xdg_surface);
+      wl_container_of(listener, server, new_xdg_surface);
   struct wlr_xdg_surface *xdg_surface = data;
 
   /* DEBUG ignore for extra ews */
@@ -680,7 +681,8 @@ static void server_new_xdg_surface(struct wl_listener *listener, void *data) {
    * we always set the user data field of xdg_surfaces to the corresponding
    * scene node. */
   if (xdg_surface->role == WLR_XDG_SURFACE_ROLE_POPUP) {
-    struct wlr_xdg_surface *parent = wlr_xdg_surface_try_from_wlr_surface(xdg_surface->popup->parent);
+    struct wlr_xdg_surface *parent =
+        wlr_xdg_surface_try_from_wlr_surface(xdg_surface->popup->parent);
     struct wlr_scene_tree *parent_tree = parent->data;
     xdg_surface->data = wlr_scene_xdg_surface_create(parent_tree, xdg_surface);
     return;
@@ -689,8 +691,7 @@ static void server_new_xdg_surface(struct wl_listener *listener, void *data) {
   assert(xdg_surface->role == WLR_XDG_SURFACE_ROLE_TOPLEVEL);
 
   /* Allocate a ews_surface for this surface */
-  struct ews_surface *surface =
-    calloc(1, sizeof(struct ews_surface));
+  struct ews_surface *surface = calloc(1, sizeof(struct ews_surface));
   wl_list_insert(&server->surfaces, &surface->link);
   surface->server = server;
   surface->xdg_surface = xdg_surface;
@@ -698,19 +699,18 @@ static void server_new_xdg_surface(struct wl_listener *listener, void *data) {
 
   /* Create an ewp_surface */
   struct wl_client *client = wl_resource_get_client(server->layout_resource);
-  struct wl_resource *resource = wl_resource_create(client, &ewp_surface_interface, 1, 0);
-  wl_resource_set_implementation(resource, &ewp_surface_implementation,
-                                 surface, ewp_surface_destroy);
+  struct wl_resource *resource =
+      wl_resource_create(client, &ewp_surface_interface, 1, 0);
+  wl_resource_set_implementation(resource, &ewp_surface_implementation, surface,
+                                 ewp_surface_destroy);
   surface->ewp_surface = resource;
 
   pid_t pid;
   wl_client_get_credentials(xdg_surface->client->client, &pid, 0, 0);
   wlr_log(WLR_DEBUG, "New toplevel XDG surface app_id=%s title=%s pid=%d",
           xdg_surface->toplevel->app_id, xdg_surface->toplevel->title, pid);
-  ewp_layout_send_new_surface(server->layout_resource,
-                              resource, 
-                              xdg_surface->toplevel->app_id,
-                              pid);
+  ewp_layout_send_new_surface(server->layout_resource, resource,
+                              xdg_surface->toplevel->app_id, pid);
 
   /* Listen to the various events it can emit */
   surface->map.notify = xdg_toplevel_map;
@@ -723,17 +723,15 @@ static void server_new_xdg_surface(struct wl_listener *listener, void *data) {
   /* cotd */
   struct wlr_xdg_toplevel *toplevel = xdg_surface->toplevel;
   surface->request_maximize.notify = xdg_toplevel_request_maximize;
-  wl_signal_add(&toplevel->events.request_maximize,
-                &surface->request_maximize);
+  wl_signal_add(&toplevel->events.request_maximize, &surface->request_maximize);
   surface->request_fullscreen.notify = xdg_toplevel_request_fullscreen;
   wl_signal_add(&toplevel->events.request_fullscreen,
                 &surface->request_fullscreen);
   surface->set_title.notify = xdg_toplevel_set_title;
-  wl_signal_add(&toplevel->events.set_title,
-                &surface->set_title);
+  wl_signal_add(&toplevel->events.set_title, &surface->set_title);
 }
 
-struct ewp_layout { 
+struct ewp_layout {
   struct ews_server *server;
 };
 
@@ -742,15 +740,17 @@ static void ewp_layout_handle_bind(struct wl_client *client, void *data,
   struct ewp_layout *layout = data;
 
   if (layout->server->layout_resource != NULL) {
-    wlr_log(WLR_ERROR, "Error: 2nd layout client tried to connect but only one allowed");
+    wlr_log(WLR_ERROR,
+            "Error: 2nd layout client tried to connect but only one allowed");
     return;
   }
 
-  struct wl_resource *resource = wl_resource_create(client, &ewp_layout_interface,
-                                                    version, id);
+  struct wl_resource *resource =
+      wl_resource_create(client, &ewp_layout_interface, version, id);
 
   /* last=NULL is handle_resource_destroy TODO add maybe */
-  /* wl_resource_set_implementation(resource, &ewp_layout_interface, layout, NULL); */
+  /* wl_resource_set_implementation(resource, &ewp_layout_interface, layout,
+   * NULL); */
 
   layout->server->layout_resource = resource;
 }
@@ -762,12 +762,12 @@ int main(int argc, char *argv[]) {
   int c;
   while ((c = getopt(argc, argv, "s:h")) != -1) {
     switch (c) {
-    case 's':
-      startup_cmd = optarg;
-      break;
-    default:
-      printf("Usage: %s [-s startup command]\n", argv[0]);
-      return 0;
+      case 's':
+        startup_cmd = optarg;
+        break;
+      default:
+        printf("Usage: %s [-s startup command]\n", argv[0]);
+        return 0;
     }
   }
   if (optind < argc) {
@@ -805,8 +805,7 @@ int main(int argc, char *argv[]) {
    * The allocator is the bridge between the renderer and the backend. It
    * handles the buffer creation, allowing wlroots to render onto the
    * screen */
-  server.allocator = wlr_allocator_autocreate(server.backend,
-                                              server.renderer);
+  server.allocator = wlr_allocator_autocreate(server.backend, server.renderer);
   if (server.allocator == NULL) {
     wlr_log(WLR_ERROR, "failed to create wlr_allocator");
     return 1;
@@ -855,8 +854,7 @@ int main(int argc, char *argv[]) {
   wl_list_init(&server.surfaces);
   server.xdg_shell = wlr_xdg_shell_create(server.wl_display, 3);
   server.new_xdg_surface.notify = server_new_xdg_surface;
-  wl_signal_add(&server.xdg_shell->events.new_surface,
-                &server.new_xdg_surface);
+  wl_signal_add(&server.xdg_shell->events.new_surface, &server.new_xdg_surface);
 
   /*
    * Create xdg_decoration_manager. This makes most applications
@@ -870,8 +868,8 @@ int main(int argc, char *argv[]) {
    * predecessor to xdg-decoration.
    */
   wlr_server_decoration_manager_set_default_mode(
-    wlr_server_decoration_manager_create(server.wl_display),
-    WLR_SERVER_DECORATION_MANAGER_MODE_SERVER);
+      wlr_server_decoration_manager_create(server.wl_display),
+      WLR_SERVER_DECORATION_MANAGER_MODE_SERVER);
 
   /*
    * Creates a cursor, which is a wlroots utility for tracking the cursor
@@ -935,8 +933,8 @@ int main(int argc, char *argv[]) {
   wlr_log(WLR_DEBUG, "server layout_resource %d", server.layout_resource);
 
   /* wl_display, wl_interface, version, *data, bind */
-  wl_global_create(server.wl_display, &ewp_layout_interface,
-                   1, &layout, ewp_layout_handle_bind);
+  wl_global_create(server.wl_display, &ewp_layout_interface, 1, &layout,
+                   ewp_layout_handle_bind);
 
   /* Add a Unix socket to the Wayland display. */
   const char *socket = wl_display_add_socket_auto(server.wl_display);
@@ -955,13 +953,14 @@ int main(int argc, char *argv[]) {
 
   /* Set the WAYLAND_DISPLAY environment variable to our socket */
   setenv("WAYLAND_DISPLAY", socket, true);
-        
+
   /* pid_t pid = fork(); */
   /* if (pid == 0) { */
-  /*   execl("/gnu/store/aaga7qf0y93rfxrkwmqwh9z1fpcdn7ii-emacs-next-pgtk-29.0.50-1.0a5477b/bin/emacs", (void *)NULL); */
+  /*   execl("/gnu/store/aaga7qf0y93rfxrkwmqwh9z1fpcdn7ii-emacs-next-pgtk-29.0.50-1.0a5477b/bin/emacs",
+   * (void *)NULL); */
   /* } */
   /* server.emacs_pid = pid; */
-        
+
   /* Run the Wayland event loop. This does not return until you exit the
    * compositor. Starting the backend rigged up all of the necessary event
    * loop configuration to listen to libinput events, DRM events, generate
