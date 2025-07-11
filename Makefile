@@ -58,6 +58,7 @@ cppcheck:
 		--enable=all \
 		--error-exitcode=1 \
 		--std=c23 \
+		--check-level=exhaustive \
 		--suppress=missingIncludeSystem \
 		--suppress=missingInclude \
 		-I. \

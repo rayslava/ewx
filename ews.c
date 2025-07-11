@@ -126,14 +126,14 @@ struct ews_keyboard {
 };
 
 static void focus_surface(struct ews_surface *ews_surface,
-                          struct wlr_surface *surface) {
+                          const struct wlr_surface *surface) {
   /* Note: this function only deals with keyboard focus. */
   if (ews_surface == NULL) {
     return;
   }
   struct ews_server *server = ews_surface->server;
   struct wlr_seat *seat = server->seat;
-  struct wlr_surface *prev_surface = seat->keyboard_state.focused_surface;
+  const struct wlr_surface *prev_surface = seat->keyboard_state.focused_surface;
   if (prev_surface == surface) {
     /* Don't re-focus an already focused surface. */
     return;
@@ -285,7 +285,7 @@ static void seat_request_cursor(struct wl_listener *listener, void *data) {
   struct ews_server *server = wl_container_of(listener, server, request_cursor);
   /* This event is raised by the seat when a client provides a cursor image */
   struct wlr_seat_pointer_request_set_cursor_event *event = data;
-  struct wlr_seat_client *focused_client =
+  const struct wlr_seat_client *focused_client =
       server->seat->pointer_state.focused_client;
   /* This can be sent by any client, so we check to make sure this one is
    * actually has pointer focus first. */
@@ -323,7 +323,7 @@ static struct ews_surface *surface_at(struct ews_server *server, double lx,
     return NULL;
   }
   struct wlr_scene_buffer *scene_buffer = wlr_scene_buffer_from_node(node);
-  struct wlr_scene_surface *scene_surface =
+  const struct wlr_scene_surface *scene_surface =
       wlr_scene_surface_try_from_buffer(scene_buffer);
   if (!scene_surface) {
     return NULL;
