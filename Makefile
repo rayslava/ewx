@@ -21,6 +21,9 @@ LIBS = \
 	 $(shell pkg-config --libs wayland-server) \
 	 $(shell pkg-config --libs xkbcommon)
 
+ASAN_FLAGS = -fsanitize=address -fno-omit-frame-pointer -O0
+UBSAN_FLAGS = -fsanitize=undefined -fno-omit-frame-pointer -O0
+
 # wayland-scanner is a tool which generates C headers and rigging for Wayland
 # protocols, which are specified in XML. wlroots requires you to rig these up
 # to your build system yourself and provide them in the include path.
@@ -35,7 +38,7 @@ ewp-protocol.c: ewp.xml
 	$(WAYLAND_SCANNER) private-code ewp.xml $@
 
 ews: $(SRCS) ewp-protocol.c ewp-protocol.h xdg-shell-protocol.h
-	$(CC) $(CFLAGS) $(CPPFLAGS) $(OPTFLAGS) \
+	$(CC) $(CFLAGS) $(CPPFLAGS) $(OPTFLAGS) $(AUX_FLAGS) \
 		-o $@ $< $(word 2,$^) \
 		$(LIBS)
 
@@ -85,6 +88,15 @@ scan-build:
 		echo "PASSED: No static analysis issues found"; \
 	fi
 
+asan: clean
+	$(MAKE) ews AUX_FLAGS="$(ASAN_FLAGS)"
+
+ubsan: clean
+	$(MAKE) ews AUX_FLAGS="$(UBSAN_FLAGS)"
+
+ews-release: clean
+	$(MAKE) ews AUX_FLAGS="-Ofast -DNDEBUG -g"
+
 clean:
 	rm -f ewl.elc ewc.elc ews xdg-shell-protocol.h xdg-shell-protocol.c ewp-protocol.h ewp-protocol.c
 	rm -rf clang-analysis
@@ -93,4 +105,4 @@ pre-commit:
 	clang-format -style=Google -i $(SRCS)
 
 .DEFAULT_GOAL=compile
-.PHONY: compile check clean pre-commit cppcheck scan-build
+.PHONY: compile check clean pre-commit cppcheck scan-build ews-asan ews-ubsan ews-msan ews-tsan ews-release sanitized-builds
