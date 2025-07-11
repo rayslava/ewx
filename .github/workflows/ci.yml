@@ -59,13 +59,7 @@ jobs:
     - name: Run cppcheck
       run: |
         echo "Running cppcheck static analysis..."
-        cppcheck \
-          --enable=all \
-          --error-exitcode=1 \
-          --std=c11 \
-          -I. \
-          -DWLR_USE_UNSTABLE \
-          ews.c 2>&1 | tee cppcheck-results.txt
+        make cppcheck | tee cppcheck-results.txt
 
         echo "Cppcheck completed. Results:"
         cat cppcheck-results.txt
