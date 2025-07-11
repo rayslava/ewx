@@ -456,6 +456,11 @@ static void output_frame(struct wl_listener *listener,
   struct wlr_scene_output *scene_output =
       wlr_scene_get_scene_output(scene, output->wlr_output);
 
+  if (!scene_output) {
+        wlr_log(WLR_DEBUG, "Scene output is NULL, skipping frame");
+        return;
+  }
+
   /* Render the scene if needed and commit the output */
   wlr_scene_output_commit(scene_output, NULL);
 

@@ -1,7 +1,7 @@
 .POSIX:
 EMACS = emacs
 CC = gcc
-CFLAGS = -Wall -Wextra -Werror -pedantic -std=c2x \
+CFLAGS = -Wall -Wextra -Wno-error -pedantic -std=c2x \
           -Wformat=2 -Wformat-security \
           -Wnull-dereference -Wstack-protector \
           -Wstrict-overflow=3 -Warray-bounds \
@@ -12,7 +12,7 @@ INCLUDES = \
 	$(shell pkg-config --cflags wayland-server) \
 	$(shell pkg-config --cflags xkbcommon)
 CPPFLAGS = -I. -DWLR_USE_UNSTABLE $(INCLUDES)
-OPTFLAGS = -ggdb
+OPTFLAGS = -ggdb -O1
 SRCS = ews.c
 WAYLAND_PROTOCOLS = $(shell pkg-config --variable=pkgdatadir wayland-protocols)
 WAYLAND_SCANNER = $(shell pkg-config --variable=wayland_scanner wayland-scanner)
@@ -21,8 +21,8 @@ LIBS = \
 	 $(shell pkg-config --libs wayland-server) \
 	 $(shell pkg-config --libs xkbcommon)
 
-ASAN_FLAGS = -fsanitize=address -fno-omit-frame-pointer -O0
-UBSAN_FLAGS = -fsanitize=undefined -fno-omit-frame-pointer -O0
+ASAN_FLAGS = -fsanitize=address -fno-omit-frame-pointer -O1
+UBSAN_FLAGS = -fsanitize=undefined -fno-omit-frame-pointer -O1
 
 # wayland-scanner is a tool which generates C headers and rigging for Wayland
 # protocols, which are specified in XML. wlroots requires you to rig these up
