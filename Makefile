@@ -45,5 +45,8 @@ check: ewl-test.el
 clean:
 	rm -f ewl.elc ewc.elc ews xdg-shell-protocol.h xdg-shell-protocol.c ewp-protocol.h
 
+pre-commit:
+	clang-format -style=Google -i *.c *.h
+
 .DEFAULT_GOAL=compile
-.PHONY: compile check clean
+.PHONY: compile check clean pre-commit
