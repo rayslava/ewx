@@ -142,9 +142,11 @@ static void focus_surface(struct ews_surface *ews_surface, struct wlr_surface *s
      * it no longer has focus and the client will repaint accordingly, e.g.
      * stop displaying a caret.
      */
-    struct wlr_xdg_surface *previous = wlr_xdg_surface_from_wlr_surface(seat->keyboard_state.focused_surface);
-    assert(previous->role == WLR_XDG_SURFACE_ROLE_TOPLEVEL);
-    wlr_xdg_toplevel_set_activated(previous->toplevel, false);
+    struct wlr_xdg_surface *previous = wlr_xdg_surface_try_from_wlr_surface(seat->keyboard_state.focused_surface);
+    if (previous != NULL) {
+      assert(previous->role == WLR_XDG_SURFACE_ROLE_TOPLEVEL);
+      wlr_xdg_toplevel_set_activated(previous->toplevel, false);
+    }
   }
   struct wlr_keyboard *keyboard = wlr_seat_get_keyboard(seat);
   /* Activate the new surface */
@@ -321,7 +323,7 @@ static struct ews_surface *surface_at(struct ews_server *server, double lx, doub
   }
   struct wlr_scene_buffer *scene_buffer = wlr_scene_buffer_from_node(node);
   struct wlr_scene_surface *scene_surface =
-    wlr_scene_surface_from_buffer(scene_buffer);
+    wlr_scene_surface_try_from_buffer(scene_buffer);
   if (!scene_surface) {
     return NULL;
   }
@@ -348,7 +350,7 @@ static void process_cursor_motion(struct ews_server *server, uint32_t time) {
     /* If there's no view under the cursor, set the cursor image to a
      * default. This is what makes the cursor image appear when you move it
      * around the screen, not over any views. */
-    wlr_xcursor_manager_set_cursor_image(server->cursor_mgr, "left_ptr", server->cursor);
+    wlr_cursor_set_xcursor(server->cursor, server->cursor_mgr, "left_ptr");
   }
   if (surface) {
     /*
@@ -455,7 +457,7 @@ static void output_frame(struct wl_listener *listener, void *data) {
   struct wlr_scene_output *scene_output = wlr_scene_get_scene_output(scene, output->wlr_output);
 
   /* Render the scene if needed and commit the output */
-  wlr_scene_output_commit(scene_output);
+  wlr_scene_output_commit(scene_output, NULL);
 
   struct timespec now;
   clock_gettime(CLOCK_MONOTONIC, &now);
@@ -678,7 +680,7 @@ static void server_new_xdg_surface(struct wl_listener *listener, void *data) {
    * we always set the user data field of xdg_surfaces to the corresponding
    * scene node. */
   if (xdg_surface->role == WLR_XDG_SURFACE_ROLE_POPUP) {
-    struct wlr_xdg_surface *parent = wlr_xdg_surface_from_wlr_surface(xdg_surface->popup->parent);
+    struct wlr_xdg_surface *parent = wlr_xdg_surface_try_from_wlr_surface(xdg_surface->popup->parent);
     struct wlr_scene_tree *parent_tree = parent->data;
     xdg_surface->data = wlr_scene_xdg_surface_create(parent_tree, xdg_surface);
     return;
@@ -712,9 +714,9 @@ static void server_new_xdg_surface(struct wl_listener *listener, void *data) {
 
   /* Listen to the various events it can emit */
   surface->map.notify = xdg_toplevel_map;
-  wl_signal_add(&xdg_surface->events.map, &surface->map);
+  wl_signal_add(&xdg_surface->surface->events.map, &surface->map);
   surface->unmap.notify = xdg_toplevel_unmap;
-  wl_signal_add(&xdg_surface->events.unmap, &surface->unmap);
+  wl_signal_add(&xdg_surface->surface->events.unmap, &surface->unmap);
   surface->destroy.notify = xdg_toplevel_destroy;
   wl_signal_add(&xdg_surface->events.destroy, &surface->destroy);
 
@@ -781,7 +783,7 @@ int main(int argc, char *argv[]) {
    * output hardware. The autocreate option will choose the most suitable
    * backend based on the current environment, such as opening an X11 window
    * if an X11 server is running. */
-  server.backend = wlr_backend_autocreate(server.wl_display);
+  server.backend = wlr_backend_autocreate(server.wl_display, NULL);
   if (server.backend == NULL) {
     wlr_log(WLR_ERROR, "failed to create wlr_backend");
     return 1;
@@ -817,7 +819,7 @@ int main(int argc, char *argv[]) {
    * to dig your fingers in and play with their behavior if you want. Note that
    * the clients cannot set the selection directly without compositor approval,
    * see the handling of the request_set_selection event below.*/
-  wlr_compositor_create(server.wl_display, server.renderer);
+  wlr_compositor_create(server.wl_display, 5, server.renderer);
   wlr_subcompositor_create(server.wl_display);
   wlr_data_device_manager_create(server.wl_display);
 
