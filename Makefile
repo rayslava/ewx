@@ -65,11 +65,31 @@ cppcheck:
 		-DWLR_USE_UNSTABLE \
 		$(SRCS)
 
+# CastToStruct is disabled to use the wl_container_of
+scan-build:
+	@echo "Running clang static analyzer..."
+	$(MAKE) clean
+	scan-build \
+		--status-bugs \
+		-analyze-headers \
+		-enable-checker security,unix,core,deadcode \
+		-disable-checker alpha.core.CastToStruct \
+		-o clang-analysis \
+		$(MAKE) CC=clang ews
+	@if [ -d "clang-analysis" ] && [ "$$(ls -A clang-analysis)" ]; then \
+		echo "WARNING: Static analysis found potential issues:"; \
+		find clang-analysis -name "*.html" -exec echo "Report: {}" \;; \
+		exit 1; \
+	else \
+		echo "PASSED: No static analysis issues found"; \
+	fi
+
 clean:
-	rm -f ewl.elc ewc.elc ews xdg-shell-protocol.h xdg-shell-protocol.c ewp-protocol.h
+	rm -f ewl.elc ewc.elc ews xdg-shell-protocol.h xdg-shell-protocol.c ewp-protocol.h ewp-protocol.c
+	rm -rf clang-analysis
 
 pre-commit:
-	clang-format -style=Google -i *.c *.h
+	clang-format -style=Google -i $(SRCS)
 
 .DEFAULT_GOAL=compile
-.PHONY: compile check clean pre-commit
+.PHONY: compile check clean pre-commit cppcheck scan-build
