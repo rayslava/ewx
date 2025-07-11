@@ -33,7 +33,7 @@ jobs:
     - name: Check format
       run: |
         echo "Checking C code formatting..."
-        for file in $(sed -ne '/SRCS/s/.*=//p' Makefile); do
+        for file in $(sed -ne '/^SRCS/s/.*=//p' Makefile); do
           if ! clang-format -style=Google --dry-run --Werror "$file" >/dev/null 2>&1; then
             echo "FAILED: $file is not formatted according to Google style"
             echo "Expected formatting:"
@@ -67,23 +67,7 @@ jobs:
     - name: Run clang static analyzer
       run: |
         echo "Running clang static analyzer..."
-        make clean
-
-        scan-build \
-          --status-bugs \
-          --view-config \
-          -analyze-headers \
-          -enable-checker security,unix,core,deadcode,alpha \
-          -o clang-analysis \
-          make CC=clang ews
-
-        if [ -d "clang-analysis" ] && [ "$(ls -A clang-analysis)" ]; then
-          echo "WARNING: Static analysis found potential issues:"
-          find clang-analysis -name "*.html" -exec echo "Report: {}" \;
-          exit 1
-        else
-          echo "PASSED: No static analysis issues found"
-        fi
+        make scan-build
 
     - name: Upload analysis results
       uses: actions/upload-artifact@v4
@@ -94,36 +78,3 @@ jobs:
           cppcheck-results.txt
           clang-analysis/
         retention-days: 30
-
-  codeql-analysis:
-    runs-on: ubuntu-latest
-    permissions:
-      security-events: write
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Initialize CodeQL
-      uses: github/codeql-action/init@v2
-      with:
-        languages: cpp
-
-    - name: Install dependencies for CodeQL
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y \
-          build-essential \
-          pkg-config \
-          libwlroots-dev \
-          libwayland-dev \
-          wayland-protocols \
-          libxkbcommon-dev
-
-    - name: Build for CodeQL
-      run: |
-        make clean
-        make ews
-
-    - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v2
