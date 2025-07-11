@@ -336,6 +336,9 @@ static struct ews_surface *surface_at(struct ews_server *server, double lx,
   while (tree != NULL && tree->node.data == NULL) {
     tree = tree->node.parent;
   }
+  if (!tree) {
+    return NULL;
+  }
   return tree->node.data;
 }
 
