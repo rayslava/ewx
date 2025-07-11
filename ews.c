@@ -561,7 +561,8 @@ static void xdg_toplevel_unmap(struct wl_listener *listener,
   struct ews_surface *surface = wl_container_of(listener, surface, unmap);
 
   /* Not handled, because emacs decides when to unmap. */
-  wlr_log(WLR_ERROR, "Attention: Someone called xdg_toplevel_unmap");
+  wlr_log(WLR_ERROR, "Attention: Someone called xdg_toplevel_unmap for %p",
+          (void *)surface);
 }
 
 static void ewp_surface_destroy(struct wl_resource *resource) {
