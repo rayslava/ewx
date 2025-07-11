@@ -1,9 +1,12 @@
 .POSIX:
-EMACS=emacs
-CC=gcc
-WAYLAND_PROTOCOLS=$(shell pkg-config --variable=pkgdatadir wayland-protocols)
-WAYLAND_SCANNER=$(shell pkg-config --variable=wayland_scanner wayland-scanner)
-LIBS=\
+EMACS = emacs
+CC = gcc
+CFLAGS = -Wall -Wextra -Werror -pedantic -std=c2x
+CPPFLAGS = -I. -DWLR_USE_UNSTABLE
+OPTFLAGS = -ggdb
+WAYLAND_PROTOCOLS = $(shell pkg-config --variable=pkgdatadir wayland-protocols)
+WAYLAND_SCANNER = $(shell pkg-config --variable=wayland_scanner wayland-scanner)
+LIBS = \
 	 $(shell pkg-config --cflags --libs wlroots) \
 	 $(shell pkg-config --cflags --libs wayland-server) \
 	 $(shell pkg-config --cflags --libs xkbcommon)
@@ -21,11 +24,8 @@ ewp-protocol.h: ewp.xml
 ewp-protocol.c: ewp.xml
 	$(WAYLAND_SCANNER) private-code ewp.xml $@
 
-# -o                     |
 ews: ews.c ewp-protocol.c ewp-protocol.h xdg-shell-protocol.h
-	$(CC) $(CFLAGS) \
-		-g -Werror -I. \
-		-DWLR_USE_UNSTABLE \
+	$(CC) $(CFLAGS) $(CPPFLAGS) $(OPTFLAGS) \
 		-o $@ $< $(word 2,$^) \
 		$(LIBS)
 
