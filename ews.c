@@ -170,7 +170,7 @@ static void focus_surface(struct ews_surface *ews_surface,
 }
 
 static void keyboard_handle_modifiers(struct wl_listener *listener,
-                                      void *data) {
+                                      __attribute__((unused)) void *data) {
   /* This event is raised when a modifier key, such as shift or alt, is
    * pressed. We simply communicate this to the client. */
   struct ews_keyboard *keyboard =
@@ -200,7 +200,8 @@ static void keyboard_handle_key(struct wl_listener *listener, void *data) {
                                event->state);
 }
 
-static void keyboard_handle_destroy(struct wl_listener *listener, void *data) {
+static void keyboard_handle_destroy(struct wl_listener *listener,
+                                    __attribute__((unused)) void *data) {
   /* This event is raised by the keyboard base wlr_input_device to signal
    * the destruction of the wlr_keyboard. It will no longer receive events
    * and should be destroyed.
@@ -343,8 +344,7 @@ static void process_cursor_motion(struct ews_server *server, uint32_t time) {
   double sx, sy;
   struct wlr_seat *seat = server->seat;
   struct wlr_surface *surface = NULL;
-  struct ews_surface *ews_surface = surface_at(
-      server, server->cursor->x, server->cursor->y, &surface, &sx, &sy);
+  surface_at(server, server->cursor->x, server->cursor->y, &surface, &sx, &sy);
   if (!surface) {
     /* If there's no view under the cursor, set the cursor image to a
      * default. This is what makes the cursor image appear when you move it
@@ -432,7 +432,8 @@ static void server_cursor_axis(struct wl_listener *listener, void *data) {
                                event->delta_discrete, event->source);
 }
 
-static void server_cursor_frame(struct wl_listener *listener, void *data) {
+static void server_cursor_frame(struct wl_listener *listener,
+                                __attribute__((unused)) void *data) {
   /* This event is forwarded by the cursor when a pointer emits an frame
    * event. Frame events are sent after regular pointer events to group
    * multiple events together. For instance, two axis events may happen at the
@@ -442,7 +443,8 @@ static void server_cursor_frame(struct wl_listener *listener, void *data) {
   wlr_seat_pointer_notify_frame(server->seat);
 }
 
-static void output_frame(struct wl_listener *listener, void *data) {
+static void output_frame(struct wl_listener *listener,
+                         __attribute__((unused)) void *data) {
   /* This function is called every time an output is ready to display a frame,
    * generally at the output's refresh rate (e.g. 60Hz). */
   struct ews_output *output = wl_container_of(listener, output, frame);
@@ -459,7 +461,8 @@ static void output_frame(struct wl_listener *listener, void *data) {
   wlr_scene_output_send_frame_done(scene_output, &now);
 }
 
-static void output_destroy(struct wl_listener *listener, void *data) {
+static void output_destroy(struct wl_listener *listener,
+                           __attribute__((unused)) void *data) {
   struct ews_output *output = wl_container_of(listener, output, destroy);
 
   wl_list_remove(&output->frame.link);
@@ -537,7 +540,8 @@ static void layout_surface(struct ews_surface *surface) {
                               surface->y);
 }
 
-static void xdg_toplevel_map(struct wl_listener *listener, void *data) {
+static void xdg_toplevel_map(struct wl_listener *listener,
+                             __attribute__((unused)) void *data) {
   /* Called when the surface is mapped, or ready to display on-screen. */
   struct ews_surface *surface = wl_container_of(listener, surface, map);
 
@@ -548,7 +552,8 @@ static void xdg_toplevel_map(struct wl_listener *listener, void *data) {
   }
 }
 
-static void xdg_toplevel_unmap(struct wl_listener *listener, void *data) {
+static void xdg_toplevel_unmap(struct wl_listener *listener,
+                               __attribute__((unused)) void *data) {
   /* Called when the surface is unmapped, and should no longer be shown. */
   struct ews_surface *surface = wl_container_of(listener, surface, unmap);
 
@@ -571,14 +576,15 @@ static void ewp_surface_destroy(struct wl_resource *resource) {
   free(surface);
 }
 
-static void xdg_toplevel_destroy(struct wl_listener *listener, void *data) {
+static void xdg_toplevel_destroy(struct wl_listener *listener,
+                                 __attribute__((unused)) void *data) {
   /* Called when the surface is destroyed and should never be shown again. */
   struct ews_surface *surface = wl_container_of(listener, surface, destroy);
   wl_resource_destroy(surface->ewp_surface);
 }
 
 static void xdg_toplevel_request_maximize(struct wl_listener *listener,
-                                          void *data) {
+                                          __attribute__((unused)) void *data) {
   /* This event is raised when a client would like to maximize itself,
    * typically because the user clicked on the maximize button on
    * client-side decorations. ews doesn't support maximization, but
@@ -589,15 +595,16 @@ static void xdg_toplevel_request_maximize(struct wl_listener *listener,
   wlr_xdg_surface_schedule_configure(surface->xdg_toplevel->base);
 }
 
-static void xdg_toplevel_request_fullscreen(struct wl_listener *listener,
-                                            void *data) {
+static void xdg_toplevel_request_fullscreen(
+    struct wl_listener *listener, __attribute__((unused)) void *data) {
   /* Just as with request_maximize, we must send a configure here. */
   struct ews_surface *surface =
       wl_container_of(listener, surface, request_fullscreen);
   wlr_xdg_surface_schedule_configure(surface->xdg_toplevel->base);
 }
 
-static void xdg_toplevel_set_title(struct wl_listener *listener, void *data) {
+static void xdg_toplevel_set_title(struct wl_listener *listener,
+                                   __attribute__((unused)) void *data) {
   /* Does this have to send a configure event too? */
   struct ews_surface *surface = wl_container_of(listener, surface, set_title);
 
@@ -605,10 +612,10 @@ static void xdg_toplevel_set_title(struct wl_listener *listener, void *data) {
                                 surface->xdg_toplevel->title);
 }
 
-static void ewp_surface_handle_layout(struct wl_client *client,
-                                      struct wl_resource *resource, uint32_t x,
-                                      uint32_t y, uint32_t width,
-                                      uint32_t height) {
+static void ewp_surface_handle_layout(
+    __attribute__((unused)) struct wl_client *client,
+    struct wl_resource *resource, uint32_t x, uint32_t y, uint32_t width,
+    uint32_t height) {
   wlr_log(WLR_DEBUG, "Laying out surface x=%d y=%d width=%d height=%d", x, y,
           width, height);
 
@@ -623,24 +630,27 @@ static void ewp_surface_handle_layout(struct wl_client *client,
   }
 }
 
-static void ewp_surface_handle_hide(struct wl_client *client,
-                                    struct wl_resource *resource) {
+static void ewp_surface_handle_hide(
+    __attribute__((unused)) struct wl_client *client,
+    struct wl_resource *resource) {
   struct ews_surface *surface = wl_resource_get_user_data(resource);
   if (surface->scene_tree != NULL) {
     wlr_scene_node_set_enabled(&surface->scene_tree->node, false);
   }
 }
 
-static void ewp_surface_handle_focus(struct wl_client *client,
-                                     struct wl_resource *resource) {
+static void ewp_surface_handle_focus(
+    __attribute__((unused)) struct wl_client *client,
+    struct wl_resource *resource) {
   struct ews_surface *surface = wl_resource_get_user_data(resource);
   /* No sanity checks oO */
   /* Surface could be hidden */
   focus_surface(surface, surface->xdg_toplevel->base->surface);
 }
 
-static void ewp_surface_handle_client_destroy(struct wl_client *client,
-                                              struct wl_resource *resource) {
+static void ewp_surface_handle_client_destroy(
+    __attribute__((unused)) struct wl_client *client,
+    struct wl_resource *resource) {
   struct ews_surface *surface = wl_resource_get_user_data(resource);
   /* TODO: ewp_surface_handle_client_destroy does not quit program that drives
    * the surface */
@@ -764,6 +774,7 @@ int main(int argc, char *argv[]) {
     switch (c) {
       case 's':
         startup_cmd = optarg;
+        wlr_log(WLR_DEBUG, "Startup command: %s", startup_cmd);
         break;
       default:
         printf("Usage: %s [-s startup command]\n", argv[0]);
@@ -930,7 +941,8 @@ int main(int argc, char *argv[]) {
   struct ewp_layout layout;
   layout.server = &server;
   server.layout_resource = NULL;
-  wlr_log(WLR_DEBUG, "server layout_resource %d", server.layout_resource);
+  wlr_log(WLR_DEBUG, "server layout_resource %p",
+          (void *)server.layout_resource);
 
   /* wl_display, wl_interface, version, *data, bind */
   wl_global_create(server.wl_display, &ewp_layout_interface, 1, &layout,
