@@ -1,9 +1,15 @@
 .POSIX:
 EMACS = emacs
 CC = gcc
-CFLAGS = -Wall -Wextra -Werror -pedantic -std=c2x
+CFLAGS = -Wall -Wextra -Werror -pedantic -std=c2x \
+          -Wformat=2 -Wformat-security \
+          -Wnull-dereference -Wstack-protector \
+          -Wstrict-overflow=3 -Warray-bounds \
+          -fstack-protector-strong \
+          -D_FORTIFY_SOURCE=2
 CPPFLAGS = -I. -DWLR_USE_UNSTABLE
 OPTFLAGS = -ggdb
+SRCS = ews.c
 WAYLAND_PROTOCOLS = $(shell pkg-config --variable=pkgdatadir wayland-protocols)
 WAYLAND_SCANNER = $(shell pkg-config --variable=wayland_scanner wayland-scanner)
 LIBS = \
@@ -24,7 +30,7 @@ ewp-protocol.h: ewp.xml
 ewp-protocol.c: ewp.xml
 	$(WAYLAND_SCANNER) private-code ewp.xml $@
 
-ews: ews.c ewp-protocol.c ewp-protocol.h xdg-shell-protocol.h
+ews: $(SRCS) ewp-protocol.c ewp-protocol.h xdg-shell-protocol.h
 	$(CC) $(CFLAGS) $(CPPFLAGS) $(OPTFLAGS) \
 		-o $@ $< $(word 2,$^) \
 		$(LIBS)
