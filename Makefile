@@ -7,15 +7,19 @@ CFLAGS = -Wall -Wextra -Werror -pedantic -std=c2x \
           -Wstrict-overflow=3 -Warray-bounds \
           -fstack-protector-strong \
           -D_FORTIFY_SOURCE=2
-CPPFLAGS = -I. -DWLR_USE_UNSTABLE
+INCLUDES = \
+	$(shell pkg-config --cflags wlroots) \
+	$(shell pkg-config --cflags wayland-server) \
+	$(shell pkg-config --cflags xkbcommon)
+CPPFLAGS = -I. -DWLR_USE_UNSTABLE $(INCLUDES)
 OPTFLAGS = -ggdb
 SRCS = ews.c
 WAYLAND_PROTOCOLS = $(shell pkg-config --variable=pkgdatadir wayland-protocols)
 WAYLAND_SCANNER = $(shell pkg-config --variable=wayland_scanner wayland-scanner)
 LIBS = \
-	 $(shell pkg-config --cflags --libs wlroots) \
-	 $(shell pkg-config --cflags --libs wayland-server) \
-	 $(shell pkg-config --cflags --libs xkbcommon)
+	 $(shell pkg-config --libs wlroots) \
+	 $(shell pkg-config --libs wayland-server) \
+	 $(shell pkg-config --libs xkbcommon)
 
 # wayland-scanner is a tool which generates C headers and rigging for Wayland
 # protocols, which are specified in XML. wlroots requires you to rig these up
@@ -47,6 +51,19 @@ compile: ewc.elc ewl.elc ews
 
 check: ewl-test.el
 	$(EMACS) -Q -L . -l $<
+
+cppcheck:
+	@echo "Running cppcheck static analysis..."
+	cppcheck \
+		--enable=all \
+		--error-exitcode=1 \
+		--std=c23 \
+		--suppress=missingIncludeSystem \
+		--suppress=missingInclude \
+		-I. \
+		$(INCLUDES) \
+		-DWLR_USE_UNSTABLE \
+		$(SRCS)
 
 clean:
 	rm -f ewl.elc ewc.elc ews xdg-shell-protocol.h xdg-shell-protocol.c ewp-protocol.h
