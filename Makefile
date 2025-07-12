@@ -69,13 +69,17 @@ cppcheck:
 		-DWLR_USE_UNSTABLE \
 		$(SRCS)
 
+tidy:
+	$(MAKE) clean
+	bear -- $(MAKE) ews
+	clang-tidy $(SRCS)
+
 # CastToStruct is disabled to use the wl_container_of
 scan-build:
 	@echo "Running clang static analyzer..."
 	$(MAKE) clean
 	scan-build \
 		--status-bugs \
-		-analyze-headers \
 		-enable-checker security,unix,core,deadcode \
 		-disable-checker alpha.core.CastToStruct \
 		-o clang-analysis \
