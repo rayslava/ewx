@@ -28,7 +28,8 @@ jobs:
           clang-format \
           clang-tools \
           cppcheck \
-          emacs-nox
+          emacs-nox \
+          bear
 
     - name: Check format
       run: |
@@ -68,6 +69,11 @@ jobs:
       run: |
         echo "Running clang static analyzer..."
         make scan-build
+
+    - name: Run clang-tidy
+      run: |
+        echo "Running clang-tidy..."
+        make tidy
 
     - name: Upload analysis results
       uses: actions/upload-artifact@v4
