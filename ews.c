@@ -457,8 +457,12 @@ static void output_frame(struct wl_listener *listener,
       wlr_scene_get_scene_output(scene, output->wlr_output);
 
   if (!scene_output) {
-        wlr_log(WLR_DEBUG, "Scene output is NULL, skipping frame");
-        return;
+    scene_output = wlr_scene_output_create(scene, output->wlr_output);
+    if (!scene_output) {
+      wlr_log(WLR_DEBUG, "Scene output is NULL, skipping frame");
+      return;
+    }
+    wlr_log(WLR_INFO, "Created scene output in frame handler");
   }
 
   /* Render the scene if needed and commit the output */
