@@ -79,8 +79,5 @@ scan-build: clean-local
 		echo "PASSED: No static analysis issues found"; \
 	fi
 
-pre-commit:
-	clang-format -style=Google -i $(srcdir)/ews.c
-
 clean-local:
 	rm -rf clang-analysis

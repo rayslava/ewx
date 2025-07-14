@@ -23,6 +23,10 @@ PKG_CHECK_MODULES([WLROOTS], [wlroots >= 0.15.0])
 PKG_CHECK_MODULES([WAYLAND_SERVER], [wayland-server])
 PKG_CHECK_MODULES([XKBCOMMON], [xkbcommon])
 
+# Check for Check testing framework (optional)
+PKG_CHECK_MODULES([CHECK], [check >= 0.9.4], [have_check=yes], [have_check=no])
+AM_CONDITIONAL([HAVE_CHECK], [test "x$have_check" = "xyes"])
+
 PKG_CHECK_VAR([WAYLAND_PROTOCOLS_DATADIR], [wayland-protocols], [pkgdatadir])
 if test "x$WAYLAND_PROTOCOLS_DATADIR" = "x"; then
     AC_MSG_ERROR([wayland-protocols not found])

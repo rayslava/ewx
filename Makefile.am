@@ -8,7 +8,7 @@ EXTRA_DIST = \
     COPYING \
     protocols/ewp.xml
 
-.PHONY: check-elisp lint-elisp elsa-check cppcheck scan-build tidy pre-commit
+.PHONY: check-elisp lint-elisp elsa-check cppcheck scan-build tidy pre-commit unit-test
 
 check-elisp: all
 	$(MAKE) -C elisp check
@@ -29,6 +29,10 @@ tidy:
 	$(MAKE) -C ews tidy
 
 pre-commit:
-	$(MAKE) -C ews pre-commit
+	@echo "Formatting C/C++ files..."
+	@find . -type f \( -name '*.c' -o -name '*.h' \) -exec clang-format -style=Google -i {} \;
+
+unit-test:
+	$(MAKE) -C tests unit-test
 
 check-local: check-elisp
