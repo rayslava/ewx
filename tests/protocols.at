@@ -1,0 +1,25 @@
+AT_BANNER([Protocol Definition Tests])
+
+AT_SETUP([EWP protocol XML is valid])
+AT_CHECK([test -f "$abs_top_srcdir/protocols/ewp.xml"], [0])
+AT_CHECK([xmllint --noout "$abs_top_srcdir/protocols/ewp.xml"], [0], [ignore], [ignore])
+AT_CLEANUP
+
+AT_SETUP([EWP protocol generates headers])
+AT_CHECK([wayland-scanner server-header "$abs_top_srcdir/protocols/ewp.xml" /dev/null], [0])
+AT_CHECK([wayland-scanner private-code "$abs_top_srcdir/protocols/ewp.xml" /dev/null], [0])
+AT_CLEANUP
+
+AT_SETUP([EWP protocol contains required interfaces])
+AT_CHECK([grep -q "interface.*ewp_layout" "$abs_top_srcdir/protocols/ewp.xml"], [0])
+AT_CHECK([grep -q "interface.*ewp_surface" "$abs_top_srcdir/protocols/ewp.xml"], [0])
+AT_CLEANUP
+
+AT_SETUP([Protocol headers compile cleanly])
+AT_CHECK([cd "$abs_top_builddir/ews" && gcc -c -Wextra -Werror -x c - <<EOF
+#include "ewp-protocol.h"
+#include "xdg-shell-protocol.h"
+int main(void) { return 0; }
+EOF
+], [0])
+AT_CLEANUP

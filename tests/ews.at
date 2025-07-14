@@ -1,0 +1,28 @@
+AT_BANNER([EWS Wayland Server Tests])
+
+AT_SETUP([EWS binary exists and is executable])
+AT_CHECK([test -x "$abs_top_builddir/ews/ews"], [0])
+AT_CLEANUP
+
+AT_SETUP([EWS help output])
+AT_CHECK(["$abs_top_builddir/ews/ews" --help], [0], [ignore], [ignore])
+AT_CLEANUP
+
+AT_SETUP([EWS version output])
+AT_CHECK(["$abs_top_builddir/ews/ews" --version], [0], [ignore], [ignore])
+AT_CLEANUP
+
+AT_SETUP([EWS protocol headers are valid C])
+AT_CHECK([gcc -c -I"$abs_top_builddir/ews" -x c - <<EOF
+#include "ewp-protocol.h"
+#include "xdg-shell-protocol.h"
+int main(void) { return 0; }
+EOF
+], [0])
+AT_CLEANUP
+
+AT_SETUP([EWS links against required libraries])
+AT_CHECK([ldd "$abs_top_builddir/ews/ews" | grep -q libwlroots], [0])
+AT_CHECK([ldd "$abs_top_builddir/ews/ews" | grep -q libwayland-server], [0])
+AT_CHECK([ldd "$abs_top_builddir/ews/ews" | grep -q libxkbcommon], [0])
+AT_CLEANUP

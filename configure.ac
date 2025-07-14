@@ -6,7 +6,11 @@ AC_CONFIG_FILES([
     Makefile
     ews/Makefile
     elisp/Makefile
+    tests/Makefile
 ])
+
+# Configure Autotest
+AC_CONFIG_TESTDIR([tests])
 
 AC_PROG_CC
 AC_PROG_CC_C_O
