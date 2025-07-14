@@ -536,8 +536,9 @@ Add buffer-local to `window-selection-change-functions'."
 (defun ewl-start-server ()
   (make-process
    :name "emacs-wayland-server"
-   :buffer " *emacs-wayland-server*"
-   :command (list (expand-file-name "./ews"))
+   :buffer "*emacs-wayland-server*"
+   :stderr "*emacs-wayland-error*"
+   :command (list (expand-file-name "../ews/ews"))
    :filter (lambda (proc str)
              (with-current-buffer (process-buffer proc)
                (goto-char (point-max))
