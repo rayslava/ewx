@@ -576,7 +576,7 @@ looks up protocol in library."
                      wl-display wl-registry wl-output)
                     ("wayland-protocols" "unstable/xdg-output/xdg-output-unstable-v1.xml"
                      zxdg-output-manager-v1 zxdg-output-v1) ; = all interfaces
-                    ("ewp.xml"
+                    ("../protocols/ewp.xml"
                      ewp-layout ewp-surface)) ; = all interfaces
                    (expand-file-name socket (xdg-runtime-dir))))
          (registry (ewc-object-add :objects objects
