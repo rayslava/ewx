@@ -1,0 +1,16 @@
+(package "ewx"
+         "0.1"
+         "Emacs Wayland X")
+
+(website-url "https://github.com/rayslava/ewx")
+(keywords "wayland")
+
+(package-file "ewx.el")
+
+(source 'gnu)
+(source 'melpa)
+
+(depends-on "emacs" "26.1")
+(depends-on "elsa" )
+
+(files "ewc.el" "ewl.el" "ewc-test.el" "ewl-test.el")

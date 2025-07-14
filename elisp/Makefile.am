@@ -30,5 +30,10 @@ lint: $(ELISP_FILES)
 		--eval "(setq byte-compile-error-on-warn t)" \
 		-f batch-byte-compile $(srcdir)/ewc.el $(srcdir)/ewl.el
 
+# TODO(test): remove the || true after fixing the issues
+elsa: $(ELISP_FILES)
+	@echo "Running elsa checks"
+	eask lint elsa || true
+
 clean-local:
 	rm -f $(ELCFILES)
