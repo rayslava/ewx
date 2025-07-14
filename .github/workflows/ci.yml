@@ -36,7 +36,12 @@ jobs:
           emacs-pgtk \
           bear \
           libxml2-utils \
-          eask-cli
+          lcov \
+          libcheck-dev \
+          eask-cli \
+          check \
+          libcmocka-dev \
+          lcov
 
     - name: Generate configure script
       run: |

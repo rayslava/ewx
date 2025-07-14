@@ -21,6 +21,14 @@
    wayland compositor released as part of the wlroots project. */
 
 #define _POSIX_C_SOURCE 200112L
+
+/* Conditional visibility for testing - make static functions testable */
+#ifdef EWS_TESTING
+#define EWS_STATIC
+#else
+#define EWS_STATIC static
+#endif
+
 #include <assert.h>
 #include <getopt.h>
 #include <stdbool.h>
@@ -52,6 +60,7 @@
 #include <xkbcommon/xkbcommon.h>
 
 #include "ewp-protocol.h"
+#include "ews_internal.h"
 
 /* For brevity's sake, struct members are annotated where they are used. */
 
@@ -125,8 +134,8 @@ struct ews_keyboard {
   struct wl_listener destroy;
 };
 
-static void focus_surface(struct ews_surface *ews_surface,
-                          const struct wlr_surface *surface) {
+EWS_STATIC void focus_surface(struct ews_surface *ews_surface,
+                              const struct wlr_surface *surface) {
   /* Note: this function only deals with keyboard focus. */
   if (ews_surface == NULL) {
     return;
@@ -311,9 +320,10 @@ static void seat_request_set_selection(struct wl_listener *listener,
   wlr_seat_set_selection(server->seat, event->source, event->serial);
 }
 
-static struct ews_surface *surface_at(struct ews_server *server, double lx,
-                                      double ly, struct wlr_surface **surface,
-                                      double *sx, double *sy) {
+EWS_STATIC struct ews_surface *surface_at(struct ews_server *server, double lx,
+                                          double ly,
+                                          struct wlr_surface **surface,
+                                          double *sx, double *sy) {
   /* This returns the topmost node in the scene at the given layout coords.
    * we only care about surface nodes as we are specifically looking for a
    * surface in the surface tree of a ews_surface. */
@@ -625,7 +635,7 @@ static void xdg_toplevel_set_title(struct wl_listener *listener,
                                 surface->xdg_toplevel->title);
 }
 
-static void ewp_surface_handle_layout(
+EWS_STATIC void ewp_surface_handle_layout(
     __attribute__((unused)) struct wl_client *client,
     struct wl_resource *resource, uint32_t x, uint32_t y, uint32_t width,
     uint32_t height) {
@@ -643,7 +653,7 @@ static void ewp_surface_handle_layout(
   }
 }
 
-static void ewp_surface_handle_hide(
+EWS_STATIC void ewp_surface_handle_hide(
     __attribute__((unused)) struct wl_client *client,
     struct wl_resource *resource) {
   struct ews_surface *surface = wl_resource_get_user_data(resource);
@@ -652,7 +662,7 @@ static void ewp_surface_handle_hide(
   }
 }
 
-static void ewp_surface_handle_focus(
+EWS_STATIC void ewp_surface_handle_focus(
     __attribute__((unused)) struct wl_client *client,
     struct wl_resource *resource) {
   struct ews_surface *surface = wl_resource_get_user_data(resource);
@@ -778,7 +788,11 @@ static void ewp_layout_handle_bind(struct wl_client *client, void *data,
   layout->server->layout_resource = resource;
 }
 
+#ifdef EWS_TESTING
+int ews_main(int argc, char *argv[]) {
+#else
 int main(int argc, char *argv[]) {
+#endif
   wlr_log_init(WLR_DEBUG, NULL);
   char *startup_cmd = NULL;
 

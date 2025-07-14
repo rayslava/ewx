@@ -1,0 +1,9 @@
+# Coveralls configuration for EWX
+service_name: github-actions
+
+# Coverage source directories
+coverage_clover: tests/coverage-clean.info
+json_path: tests/coverage.json
+
+# Repository settings  
+repo_token: <%= ENV['COVERALLS_REPO_TOKEN'] %>

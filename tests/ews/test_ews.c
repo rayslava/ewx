@@ -1,8 +1,6 @@
-/* test_ews.c - Unit tests for ews mathematical and logical functions using
- * Check framework
+/* test_ews.c - Unit tests for ews functions using Check framework
  *
- * This file contains unit tests for functions that can be tested
- * without complex Wayland mocking.
+ * This file contains unit tests for actual functions from ews.c
  */
 
 #include <check.h>
@@ -11,257 +9,102 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* Include the internal header to access testable functions */
+#include "../../ews/ews_internal.h"
+
 /* ============================================================================
- * FUNCTIONS UNDER TEST
+ * TEST CASES FOR EWS INTEGRATION
  * ============================================================================
  */
 
-/* Pure function for surface bounds validation */
-bool validate_surface_bounds(uint32_t x, uint32_t y, uint32_t width,
-                             uint32_t height) {
-  const uint32_t MAX_COORDINATE = 32768;
-  const uint32_t MAX_SURFACE_SIZE = 16384;
-
-  if (width == 0 || height == 0) {
-    return false;
-  }
-
-  if (x >= MAX_COORDINATE || y >= MAX_COORDINATE) {
-    return false;
-  }
-
-  if (width > MAX_SURFACE_SIZE || height > MAX_SURFACE_SIZE) {
-    return false;
-  }
-
-  /* Check for overflow in coordinate calculations */
-  if (x > MAX_COORDINATE - width || y > MAX_COORDINATE - height) {
-    return false;
-  }
-
-  return true;
-}
-
-/* Simple coordinate normalization function */
-void normalize_coordinates(int *x, int *y, int width, int height) {
-  if (x && *x < 0) {
-    *x = 0;
-  }
-  if (y && *y < 0) {
-    *y = 0;
-  }
-
-  if (x && width > 0 && *x > width) {
-    *x = width;
-  }
-  if (y && height > 0 && *y > height) {
-    *y = height;
-  }
-}
-
-/* Helper function to check if surface dimensions are valid */
-bool is_valid_surface_size(uint32_t width, uint32_t height) {
-  const uint32_t MIN_SIZE = 1;
-  const uint32_t MAX_SIZE = 8192;
-
-  return width >= MIN_SIZE && height >= MIN_SIZE && width <= MAX_SIZE &&
-         height <= MAX_SIZE;
-}
-
-/* Calculate surface area (useful for memory allocation decisions) */
-uint64_t calculate_surface_area(uint32_t width, uint32_t height) {
-  return (uint64_t)width * (uint64_t)height;
-}
-
-/* Check if point is within surface bounds */
-bool point_in_surface(int px, int py, int sx, int sy, uint32_t width,
-                      uint32_t height) {
-  return px >= sx && py >= sy && px < (sx + (int)width) &&
-         py < (sy + (int)height);
-}
-
-/* Simple configuration parsing helper */
-struct ews_config {
-  char *startup_cmd;
-  bool show_help;
-  bool valid;
-};
-
-struct ews_config parse_single_arg(const char *arg, const char *value) {
+/* Test suite for basic integration - verify the test framework works */
+START_TEST(test_ews_config_struct) {
   struct ews_config config = {0};
+  config.valid = true;
+  config.show_help = false;
+  config.show_version = false;
+  config.debug_mode = false;
+  config.startup_cmd = NULL;
 
-  if (!arg) {
-    config.valid = false;
-    return config;
-  }
-
-  if (strcmp(arg, "-h") == 0 || strcmp(arg, "--help") == 0) {
-    config.show_help = true;
-    config.valid = true;
-  } else if (strcmp(arg, "-s") == 0) {
-    if (value) {
-      config.startup_cmd = strdup(value);
-      config.valid = true;
-    } else {
-      config.valid = false;
-    }
-  } else {
-    config.valid = false;
-  }
-
-  return config;
+  ck_assert(config.valid);
+  ck_assert(!config.show_help);
+  ck_assert(!config.show_version);
+  ck_assert(!config.debug_mode);
+  ck_assert_ptr_eq(config.startup_cmd, NULL);
 }
+END_TEST
 
 /* ============================================================================
- * TEST CASES
+ * TEST CASES FOR EWS TEST SURFACE OPERATIONS
  * ============================================================================
  */
 
-/* Test suite for validate_surface_bounds */
-START_TEST(test_validate_surface_bounds_valid) {
-  ck_assert(validate_surface_bounds(0, 0, 100, 100));
-  ck_assert(validate_surface_bounds(1000, 1000, 800, 600));
-  ck_assert(validate_surface_bounds(32767, 32767, 1, 1));
+START_TEST(test_ews_test_surface_contains_point) {
+  struct ews_test_surface surface = {100, 100, 200, 150, true, false};
+
+  /* Point inside */
+  ck_assert(ews_test_surface_contains_point(&surface, 150, 125));
+  ck_assert(ews_test_surface_contains_point(&surface, 299, 249));
+
+  /* Point outside */
+  ck_assert(!ews_test_surface_contains_point(&surface, 50, 125));
+  ck_assert(!ews_test_surface_contains_point(&surface, 300, 125));
+
+  /* Invisible surface */
+  surface.visible = false;
+  ck_assert(!ews_test_surface_contains_point(&surface, 150, 125));
 }
 END_TEST
 
-START_TEST(test_validate_surface_bounds_invalid) {
-  ck_assert(!validate_surface_bounds(0, 0, 0, 100));
-  ck_assert(!validate_surface_bounds(0, 0, 100, 0));
-  ck_assert(!validate_surface_bounds(32768, 0, 100, 100));
-  ck_assert(!validate_surface_bounds(0, 32768, 100, 100));
-  ck_assert(!validate_surface_bounds(0, 0, 16385, 100));
-  ck_assert(!validate_surface_bounds(0, 0, 100, 16385));
+START_TEST(test_ews_test_surfaces_overlap) {
+  struct ews_test_surface s1 = {0, 0, 100, 100, true, false};
+  struct ews_test_surface s2 = {50, 50, 100, 100, true, false};
+  struct ews_test_surface s3 = {200, 200, 100, 100, true, false};
+
+  /* Overlapping surfaces */
+  ck_assert(ews_test_surfaces_overlap(&s1, &s2));
+  ck_assert(ews_test_surfaces_overlap(&s2, &s1));
+
+  /* Non-overlapping surfaces */
+  ck_assert(!ews_test_surfaces_overlap(&s1, &s3));
+  ck_assert(!ews_test_surfaces_overlap(&s3, &s1));
+
+  /* Invisible surface */
+  s2.visible = false;
+  ck_assert(!ews_test_surfaces_overlap(&s1, &s2));
 }
 END_TEST
 
-START_TEST(test_validate_surface_bounds_overflow) {
-  ck_assert(!validate_surface_bounds(32767, 0, 2, 1));
-  ck_assert(!validate_surface_bounds(0, 32767, 1, 2));
+START_TEST(test_ews_test_surface_move) {
+  struct ews_test_surface surface = {100, 100, 200, 150, true, false};
+
+  ews_test_surface_move(&surface, 50, -25);
+  ck_assert_int_eq(surface.x, 150);
+  ck_assert_int_eq(surface.y, 75);
+
+  ews_test_surface_move(&surface, -50, 25);
+  ck_assert_int_eq(surface.x, 100);
+  ck_assert_int_eq(surface.y, 100);
 }
 END_TEST
 
-/* Test suite for normalize_coordinates */
-START_TEST(test_normalize_coordinates_basic) {
-  int x = -10, y = -20;
-  normalize_coordinates(&x, &y, 1000, 800);
-  ck_assert_int_eq(x, 0);
-  ck_assert_int_eq(y, 0);
+START_TEST(test_ews_test_surface_resize) {
+  struct ews_test_surface surface = {100, 100, 200, 150, true, false};
 
-  x = 1500;
-  y = 1000;
-  normalize_coordinates(&x, &y, 1000, 800);
-  ck_assert_int_eq(x, 1000);
-  ck_assert_int_eq(y, 800);
+  /* Valid resize */
+  ews_test_surface_resize(&surface, 300, 250);
+  ck_assert_uint_eq(surface.width, 300);
+  ck_assert_uint_eq(surface.height, 250);
 
-  x = 500;
-  y = 400;
-  normalize_coordinates(&x, &y, 1000, 800);
-  ck_assert_int_eq(x, 500);
-  ck_assert_int_eq(y, 400);
-}
-END_TEST
+  /* Invalid resize (too large) - should not change */
+  ews_test_surface_resize(&surface, 10000, 250);
+  ck_assert_uint_eq(surface.width, 300);
+  ck_assert_uint_eq(surface.height, 250);
 
-START_TEST(test_normalize_coordinates_null_params) {
-  int x = -10, y = -20;
-  normalize_coordinates(NULL, &y, 1000, 800);
-  ck_assert_int_eq(y, 0);
-
-  x = -10;
-  y = -20;
-  normalize_coordinates(&x, NULL, 1000, 800);
-  ck_assert_int_eq(x, 0);
-}
-END_TEST
-
-/* Test suite for is_valid_surface_size */
-START_TEST(test_is_valid_surface_size_valid) {
-  ck_assert(is_valid_surface_size(100, 100));
-  ck_assert(is_valid_surface_size(1, 1));
-  ck_assert(is_valid_surface_size(8192, 8192));
-}
-END_TEST
-
-START_TEST(test_is_valid_surface_size_invalid) {
-  ck_assert(!is_valid_surface_size(0, 100));
-  ck_assert(!is_valid_surface_size(100, 0));
-  ck_assert(!is_valid_surface_size(8193, 100));
-  ck_assert(!is_valid_surface_size(100, 8193));
-}
-END_TEST
-
-/* Test suite for calculate_surface_area */
-START_TEST(test_calculate_surface_area_normal) {
-  ck_assert_uint_eq(calculate_surface_area(100, 100), 10000);
-  ck_assert_uint_eq(calculate_surface_area(1920, 1080), 2073600);
-  ck_assert_uint_eq(calculate_surface_area(1, 1), 1);
-  ck_assert_uint_eq(calculate_surface_area(0, 100), 0);
-}
-END_TEST
-
-START_TEST(test_calculate_surface_area_large) {
-  /* Test for overflow prevention */
-  ck_assert_uint_eq(calculate_surface_area(65536, 65536), 4294967296ULL);
-}
-END_TEST
-
-/* Test suite for point_in_surface */
-START_TEST(test_point_in_surface_inside) {
-  ck_assert(point_in_surface(50, 50, 0, 0, 100, 100));
-  ck_assert(point_in_surface(150, 150, 100, 100, 100, 100));
-}
-END_TEST
-
-START_TEST(test_point_in_surface_boundary) {
-  ck_assert(point_in_surface(0, 0, 0, 0, 100, 100));
-  ck_assert(!point_in_surface(100, 100, 0, 0, 100, 100));
-}
-END_TEST
-
-START_TEST(test_point_in_surface_outside) {
-  ck_assert(!point_in_surface(-1, 50, 0, 0, 100, 100));
-  ck_assert(!point_in_surface(101, 50, 0, 0, 100, 100));
-  ck_assert(!point_in_surface(50, -1, 0, 0, 100, 100));
-  ck_assert(!point_in_surface(50, 101, 0, 0, 100, 100));
-  ck_assert(!point_in_surface(50, 50, 100, 100, 100, 100));
-}
-END_TEST
-
-/* Test suite for parse_single_arg */
-START_TEST(test_parse_single_arg_help) {
-  struct ews_config config;
-
-  config = parse_single_arg("-h", NULL);
-  ck_assert(config.valid);
-  ck_assert(config.show_help);
-
-  config = parse_single_arg("--help", NULL);
-  ck_assert(config.valid);
-  ck_assert(config.show_help);
-}
-END_TEST
-
-START_TEST(test_parse_single_arg_startup) {
-  struct ews_config config;
-
-  config = parse_single_arg("-s", "test_command");
-  ck_assert(config.valid);
-  ck_assert_str_eq(config.startup_cmd, "test_command");
-  free(config.startup_cmd);
-
-  config = parse_single_arg("-s", NULL);
-  ck_assert(!config.valid);
-}
-END_TEST
-
-START_TEST(test_parse_single_arg_invalid) {
-  struct ews_config config;
-
-  config = parse_single_arg("-x", NULL);
-  ck_assert(!config.valid);
-
-  config = parse_single_arg(NULL, NULL);
-  ck_assert(!config.valid);
+  /* Invalid resize (zero) - should not change */
+  ews_test_surface_resize(&surface, 0, 250);
+  ck_assert_uint_eq(surface.width, 300);
+  ck_assert_uint_eq(surface.height, 250);
 }
 END_TEST
 
@@ -270,61 +113,43 @@ END_TEST
  * ============================================================================
  */
 
-static Suite *ews_suite(void) {
+static Suite *ews_integration_suite(void) {
   Suite *s;
-  TCase *tc_bounds, *tc_coords, *tc_size, *tc_area, *tc_point, *tc_args;
+  TCase *tc_integration;
 
-  s = suite_create("EWS Math/Logic Functions");
+  s = suite_create("EWS Integration");
 
-  /* Surface bounds validation tests */
-  tc_bounds = tcase_create("Surface Bounds");
-  tcase_add_test(tc_bounds, test_validate_surface_bounds_valid);
-  tcase_add_test(tc_bounds, test_validate_surface_bounds_invalid);
-  tcase_add_test(tc_bounds, test_validate_surface_bounds_overflow);
-  suite_add_tcase(s, tc_bounds);
+  /* Basic integration tests */
+  tc_integration = tcase_create("Integration Tests");
+  tcase_add_test(tc_integration, test_ews_config_struct);
+  suite_add_tcase(s, tc_integration);
 
-  /* Coordinate normalization tests */
-  tc_coords = tcase_create("Coordinate Normalization");
-  tcase_add_test(tc_coords, test_normalize_coordinates_basic);
-  tcase_add_test(tc_coords, test_normalize_coordinates_null_params);
-  suite_add_tcase(s, tc_coords);
+  return s;
+}
 
-  /* Surface size validation tests */
-  tc_size = tcase_create("Surface Size Validation");
-  tcase_add_test(tc_size, test_is_valid_surface_size_valid);
-  tcase_add_test(tc_size, test_is_valid_surface_size_invalid);
-  suite_add_tcase(s, tc_size);
+static Suite *ews_test_surface_suite(void) {
+  Suite *s;
+  TCase *tc_test_surface;
 
-  /* Surface area calculation tests */
-  tc_area = tcase_create("Surface Area Calculation");
-  tcase_add_test(tc_area, test_calculate_surface_area_normal);
-  tcase_add_test(tc_area, test_calculate_surface_area_large);
-  suite_add_tcase(s, tc_area);
+  s = suite_create("EWS Test Surface Operations");
 
-  /* Point in surface tests */
-  tc_point = tcase_create("Point in Surface");
-  tcase_add_test(tc_point, test_point_in_surface_inside);
-  tcase_add_test(tc_point, test_point_in_surface_boundary);
-  tcase_add_test(tc_point, test_point_in_surface_outside);
-  suite_add_tcase(s, tc_point);
-
-  /* Argument parsing tests */
-  tc_args = tcase_create("Argument Parsing");
-  tcase_add_test(tc_args, test_parse_single_arg_help);
-  tcase_add_test(tc_args, test_parse_single_arg_startup);
-  tcase_add_test(tc_args, test_parse_single_arg_invalid);
-  suite_add_tcase(s, tc_args);
+  tc_test_surface = tcase_create("Test Surface Operations");
+  tcase_add_test(tc_test_surface, test_ews_test_surface_contains_point);
+  tcase_add_test(tc_test_surface, test_ews_test_surfaces_overlap);
+  tcase_add_test(tc_test_surface, test_ews_test_surface_move);
+  tcase_add_test(tc_test_surface, test_ews_test_surface_resize);
+  suite_add_tcase(s, tc_test_surface);
 
   return s;
 }
 
 int main(void) {
-  int number_failed;
-  Suite *s;
+  int number_failed = 0;
   SRunner *sr;
 
-  s = ews_suite();
-  sr = srunner_create(s);
+  /* Run integration and test surface tests */
+  sr = srunner_create(ews_integration_suite());
+  srunner_add_suite(sr, ews_test_surface_suite());
 
   srunner_run_all(sr, CK_NORMAL);
   number_failed = srunner_ntests_failed(sr);

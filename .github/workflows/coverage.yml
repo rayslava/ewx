@@ -1,0 +1,143 @@
+name: Code Coverage
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+env:
+  DEBIAN_FRONTEND: noninteractive
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          autoconf \
+          automake \
+          pkg-config \
+          libwayland-dev \
+          wayland-protocols \
+          libwlroots-dev \
+          libxkbcommon-dev \
+          emacs-nox \
+          lcov \
+          libcheck-dev \
+          curl
+    
+    - name: Configure with coverage enabled
+      run: |
+        autoreconf -fiv
+        ./configure --enable-coverage --enable-debug
+    
+    - name: Build project
+      run: make -j$(nproc)
+    
+    - name: Generate coverage report
+      run: make coverage
+    
+    - name: Upload coverage to Coveralls
+      uses: coverallsapp/github-action@v2
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        format: lcov
+        files: tests/coverage-clean.info
+    
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v4
+      with:
+        files: tests/coverage-clean.info
+        token: ${{ secrets.CODECOV_TOKEN }}
+        fail_ci_if_error: false
+    
+    - name: Prepare GitHub Pages content
+      run: |
+        mkdir -p gh-pages
+        cp -r tests/coverage-html/* gh-pages/
+        
+        # Create index.html redirect if it doesn't exist
+        if [ ! -f gh-pages/index.html ]; then
+          echo '<!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="utf-8">
+            <title>EWX Coverage Report</title>
+            <meta http-equiv="refresh" content="0; url=./index.html">
+          </head>
+          <body>
+            <a href="./index.html">Coverage Report</a>
+          </body>
+          </html>' > gh-pages/index.html
+        fi
+        
+        # Add coverage summary to README
+        echo "# EWX Code Coverage Report" > gh-pages/README.md
+        echo "" >> gh-pages/README.md
+        echo "This page contains the latest code coverage report for the EWX project." >> gh-pages/README.md
+        echo "" >> gh-pages/README.md
+        echo "Generated on: $(date)" >> gh-pages/README.md
+        echo "" >> gh-pages/README.md
+        echo "[View Coverage Report](./index.html)" >> gh-pages/README.md
+    
+    - name: Deploy to GitHub Pages
+      if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'
+      uses: peaceiris/actions-gh-pages@v3
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./gh-pages
+        destination_dir: coverage
+    
+    - name: Comment coverage summary on PR
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const lcov = fs.readFileSync('tests/coverage-clean.info', 'utf8');
+          
+          // Parse basic coverage info
+          const lines = lcov.split('\n');
+          let totalLines = 0;
+          let hitLines = 0;
+          let totalFunctions = 0;
+          let hitFunctions = 0;
+          
+          for (const line of lines) {
+            if (line.startsWith('LH:')) {
+              hitLines += parseInt(line.split(':')[1]);
+            } else if (line.startsWith('LF:')) {
+              totalLines += parseInt(line.split(':')[1]);
+            } else if (line.startsWith('FNH:')) {
+              hitFunctions += parseInt(line.split(':')[1]);
+            } else if (line.startsWith('FNF:')) {
+              totalFunctions += parseInt(line.split(':')[1]);
+            }
+          }
+          
+          const lineCoverage = totalLines > 0 ? ((hitLines / totalLines) * 100).toFixed(1) : '0.0';
+          const funcCoverage = totalFunctions > 0 ? ((hitFunctions / totalFunctions) * 100).toFixed(1) : '0.0';
+          
+          const comment = `## 📊 Code Coverage Report
+          
+          | Metric | Coverage |
+          |--------|----------|
+          | Lines  | ${lineCoverage}% (${hitLines}/${totalLines}) |
+          | Functions | ${funcCoverage}% (${hitFunctions}/${totalFunctions}) |
+          
+          Coverage report will be available at: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/coverage/
+          `;
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: comment
+          });

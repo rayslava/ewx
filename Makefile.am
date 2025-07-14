@@ -8,7 +8,7 @@ EXTRA_DIST = \
     COPYING \
     protocols/ewp.xml
 
-.PHONY: check-elisp lint-elisp elsa-check cppcheck scan-build tidy pre-commit unit-test
+.PHONY: check-elisp lint-elisp elsa-check cppcheck scan-build tidy pre-commit unit-test coverage coverage-clean
 
 check-elisp: all
 	$(MAKE) -C elisp check
@@ -34,5 +34,11 @@ pre-commit:
 
 unit-test:
 	$(MAKE) -C tests unit-test
+
+coverage:
+	$(MAKE) -C tests coverage
+
+coverage-clean:
+	$(MAKE) -C tests coverage-clean
 
 check-local: check-elisp

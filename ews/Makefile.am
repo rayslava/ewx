@@ -29,10 +29,14 @@ ews_CPPFLAGS = \
     $(XKBCOMMON_CFLAGS) \
     -DWLR_USE_UNSTABLE
 
+ews_CFLAGS = $(COVERAGE_CFLAGS)
+
 ews_LDADD = \
     $(WLROOTS_LIBS) \
     $(WAYLAND_SERVER_LIBS) \
     $(XKBCOMMON_LIBS)
+
+ews_LDFLAGS = $(COVERAGE_LDFLAGS)
 
 EXTRA_DIST = $(top_srcdir)/protocols/ewp.xml
 

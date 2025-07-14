@@ -27,6 +27,33 @@ PKG_CHECK_MODULES([XKBCOMMON], [xkbcommon])
 PKG_CHECK_MODULES([CHECK], [check >= 0.9.4], [have_check=yes], [have_check=no])
 AM_CONDITIONAL([HAVE_CHECK], [test "x$have_check" = "xyes"])
 
+# Check for cmocka testing framework (optional)
+PKG_CHECK_MODULES([CMOCKA], [cmocka >= 1.1.0], [have_cmocka=yes], [have_cmocka=no])
+AM_CONDITIONAL([HAVE_CMOCKA], [test "x$have_cmocka" = "xyes"])
+
+# Check for code coverage tools (optional)
+AC_ARG_ENABLE([coverage],
+    AS_HELP_STRING([--enable-coverage], [Enable code coverage analysis]),
+    [coverage=$enableval],
+    [coverage=no])
+
+if test "x$coverage" = "xyes"; then
+    AC_CHECK_PROG([LCOV], [lcov], [lcov])
+    AC_CHECK_PROG([GENHTML], [genhtml], [genhtml])
+    if test "x$LCOV" = "x" -o "x$GENHTML" = "x"; then
+        AC_MSG_ERROR([lcov and genhtml are required for coverage analysis. Install lcov package.])
+    fi
+    COVERAGE_CFLAGS="--coverage -fprofile-arcs -ftest-coverage"
+    COVERAGE_LDFLAGS="--coverage"
+else
+    COVERAGE_CFLAGS=""
+    COVERAGE_LDFLAGS=""
+fi
+
+AC_SUBST([COVERAGE_CFLAGS])
+AC_SUBST([COVERAGE_LDFLAGS])
+AM_CONDITIONAL([ENABLE_COVERAGE], [test "x$coverage" = "xyes"])
+
 PKG_CHECK_VAR([WAYLAND_PROTOCOLS_DATADIR], [wayland-protocols], [pkgdatadir])
 if test "x$WAYLAND_PROTOCOLS_DATADIR" = "x"; then
     AC_MSG_ERROR([wayland-protocols not found])
