@@ -49,7 +49,7 @@
 
 ;; The different roles of wayland surfaces are:
 ;;   1. Emacs frame    = a new frame of the main Emacs
-;;   2. Wayland buffer = An arbitrary wayland surface treated as Emacs buffer 
+;;   2. Wayland buffer = An arbitrary wayland surface treated as Emacs buffer
 ;;   3. Wayland widget = An arbitrary wayland surface embedded into an Emacs buffer
 ;;   The first two are already implemented.
 
@@ -86,7 +86,7 @@
 ;; different kind of surfaces:
 ;;   1. emacs frame
 ;;   2. wayland buffer
-;;   3. wayland widget 
+;;   3. wayland widget
 
 ;; detect 1 and 3 by pid -> surface dispatch mechanism
 
@@ -177,11 +177,14 @@
            (ewl-output-update (ewc-object-data object) update))
          (setq update nil))))))
 
+;; Forward declaration for closure-defined function
+(declare-function ewl-output-listener "ewl")
+
 ;; Split in -init and -new to set listeners only once and not for each new output.
 (defun ewl-output-init (objects)
   (setf (ewc-listener-global objects 'wayland 'wl-output 'done)
         (ewl-output-listener 'done))
-  
+
   (dolist (event '(logical-position logical-size name description))
     (setf (ewc-listener-global objects 'xdg-output-unstable-v1 'zxdg-output-v1 event)
           (ewl-output-listener event))))
@@ -212,7 +215,7 @@
 
     (message "Made a frame")            ; DEBUG
     (message "terminals %s" (terminal-list))            ; DEBUG
-    
+
     (let ((wl-output (ewc-object-add :objects (ewc-object-objects registry)
                                      :protocol 'wayland
                                      :interface 'wl-output
@@ -252,7 +255,7 @@
 ;; 1 layout frame surface on output
 (defun ewl-output-layout-frame (output)
   "Returns nil if OUTPUT can not be layed out yet."
-  (pcase-let (((cl-struct ewl-output surface 
+  (pcase-let (((cl-struct ewl-output surface
                           x y width height)
                output))
 
@@ -300,7 +303,7 @@ windows including the minibuffer."
     (when height (setf (ewl-output-height output) height))
     (when name (setf (ewl-output-name output) name))
     (when description (setf (ewl-output-description output) description))
-    
+
     ;; Update layout-surface function
     (when (or x y height)
       (setf (frame-parameter (ewl-output-frame output) 'layout-surface)
@@ -313,6 +316,13 @@ windows including the minibuffer."
       (ewl-output-layout-frame output))))
 
 ;;; Layout & surface handling
+
+;; Wayland Buffer
+(defvar-local ewl-buffer-surface nil)
+
+;; A global Alist from wayland buffer to window keeps track of state.
+(defvar ewl-buffers nil "Global Alist from wayland buffer to window.")
+
 (defun ewl-layout-init (registry name version _outputs)
   (cl-assert (eql version 1))
   (let ((layout (ewc-object-add :objects (ewc-object-objects registry)
@@ -359,7 +369,7 @@ The function should return nil if it does not handle this surface.")
 
 (defun ewl-surface-new (object args)
   (message "New surface: %s" args) ; DEBUG
-  
+
   (pcase-let (((map id ('app_id app-id) pid) args))
     ;; handle update-title and destroy events -> do it once in init
 
@@ -389,14 +399,11 @@ The function should return nil if it does not handle this surface.")
 (defun ewl-hide (surface)
   (ewc-request surface 'hide))
 
-;;; Wayland Buffer
-(defvar-local ewl-buffer-surface nil)
-
 (defun ewl-buffer-layout (&optional window)
   "Layout current wayland buffer on current window or WINDOW."
   (pcase-let ((`(,left ,top ,right ,bottom) (window-absolute-body-pixel-edges window)))
     (message "Update layout %s %s %s %s" left top right bottom)
-    
+
     (funcall (frame-parameter nil 'layout-surface)
              ewl-buffer-surface
              left top
@@ -411,8 +418,6 @@ The function should return nil if it does not handle this surface.")
 ;; => The buffer-local hook does not run on window or buffer hide.
 ;; Update rule: A wayland buffer can only be shown once!
 ;;            & Switch it into focus(ed window) if possible.
-;; A global Alist from wayland buffer to window keeps track of state.
-(defvar ewl-buffers nil "Global Alist from wayland buffer to window.")
 ;; It is populated lazily on update but could be seeded early by
 ;; ewl-buffer-init.
 ;; The different states:
@@ -443,7 +448,7 @@ its current state."
               done)
           (unless (eq buffer (window-buffer next))
             (setq next nil))
-          
+
           (message "Next: %s" next)     ; DEBUG
           (if next
               (ewl-buffer-layout next)
@@ -488,7 +493,7 @@ Add buffer-local to `window-selection-change-functions'."
 
 \\{ewl-buffer-mode-map}"
   ;; Seeded from exwm-mode
-  
+
   ;; Disallow changing the major-mode
   (add-hook 'change-major-mode-hook #'kill-buffer nil t)
   ;; Adapt kill-buffer
@@ -584,10 +589,10 @@ looks up protocol in library."
                                    :interface 'wl-registry))
          (outputs (ewl-outputs-make)))
     ;; TODO: Move outputs to var? Less encapsulation is  more emacsy.
-    
+
     (ewl-output-init objects)
     (ewl-surface-init objects)
-    
+
     ;; Add global listener
     (setf (ewc-listener registry 'global)
           (pcase-lambda (_object (map name interface version))
