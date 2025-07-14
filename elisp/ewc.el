@@ -336,6 +336,8 @@ Returns a `ewc-objects' struct with wl-display as object 1."
      :interface 'wl-display
      :data (make-network-process
             :name "emacs-wayland-client"
+            :family 'local
+            :service t
             :remote (or socket (getenv "WAYLAND_DISPLAY"))
             :coding 'binary
             :filter (ewc-filter objects)))
