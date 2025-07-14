@@ -17,7 +17,7 @@ lint-elisp:
 	$(MAKE) -C elisp lint
 
 elsa-check:
-	$(MAKE) -C elisp elsa-check
+	$(MAKE) -C elisp elsa
 
 cppcheck:
 	$(MAKE) -C ews cppcheck
