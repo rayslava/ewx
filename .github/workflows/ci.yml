@@ -19,6 +19,9 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y \
           build-essential \
+          autotools-dev \
+          autoconf \
+          automake \
           pkg-config \
           libwlroots-dev \
           libwayland-dev \
@@ -28,34 +31,74 @@ jobs:
           clang-format \
           clang-tools \
           cppcheck \
-          emacs-nox \
+          emacs-pgtk \
           bear
+
+    - name: Generate configure script
+      run: |
+        echo "Generating autotools files..."
+        autoreconf -fvi
+
+    - name: Configure build
+      run: |
+        echo "Configuring build with autotools..."
+        # Try with PGTK check first, fallback if emacs-pgtk not available
+        ./configure || ./configure --disable-pgtk-check
 
     - name: Check format
       run: |
         echo "Checking C code formatting..."
-        for file in $(sed -ne '/^SRCS/s/.*=//p' Makefile); do
-          if ! clang-format -style=Google --dry-run --Werror "$file" >/dev/null 2>&1; then
-            echo "FAILED: $file is not formatted according to Google style"
-            echo "Expected formatting:"
-            clang-format -style=Google "$file" | diff -u "$file" - || true
-            exit 1
-          else
-            echo "PASSED: $file"
-          fi
-        done
+        make pre-commit
+        echo "PASSED: Code formatting check completed"
 
-    - name: Build EWS part
+    - name: Build project
+      run: |
+        echo "Building project with autotools..."
+        make
+        echo "PASSED: Build completed successfully"
+
+    - name: Test with different compilers
       run: |
         echo "Testing compilation with different compilers..."
 
         make clean
-        make CC=gcc ews
+        (./configure CC=gcc || ./configure CC=gcc --disable-pgtk-check)
+        make
         echo "PASSED: GCC compilation successful"
 
         make clean
-        make CC=clang ews
+        (./configure CC=clang || ./configure CC=clang --disable-pgtk-check)
+        make
         echo "PASSED: Clang compilation successful"
+
+    - name: Test sanitizer builds
+      run: |
+        echo "Testing sanitizer builds..."
+
+        make clean
+        (./configure --enable-asan || ./configure --enable-asan --disable-pgtk-check)
+        make
+        echo "PASSED: AddressSanitizer build successful"
+
+        make clean
+        (./configure --enable-ubsan || ./configure --enable-ubsan --disable-pgtk-check)
+        make
+        echo "PASSED: UndefinedBehaviorSanitizer build successful"
+
+    - name: Run tests
+      run: |
+        echo "Running test suite..."
+        # Reconfigure for tests
+        make clean
+        (./configure || ./configure --disable-pgtk-check)
+        make check
+        echo "PASSED: Tests completed"
+
+    - name: Run elisp checks
+      run: |
+        echo "Running Elisp lint checks..."
+        make lint-elisp
+        echo "PASSED: Elisp checks completed"
 
     - name: Run cppcheck
       run: |
