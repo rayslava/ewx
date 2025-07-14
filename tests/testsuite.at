@@ -1,0 +1,11 @@
+AT_INIT([ewx test suite])
+
+# Package information
+AT_COPYRIGHT([Copyright (C) 2024 ewx project])
+AT_COLOR_TESTS
+
+# Test groups
+m4_include([build.at])
+m4_include([ews.at])
+m4_include([elisp.at])
+m4_include([protocols.at])

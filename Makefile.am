@@ -1,6 +1,6 @@
 ACLOCAL_AMFLAGS = -I m4
 
-SUBDIRS = ews elisp
+SUBDIRS = ews elisp tests
 
 EXTRA_DIST = \
     README.org \

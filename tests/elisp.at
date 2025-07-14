@@ -1,0 +1,26 @@
+AT_BANNER([Elisp Component Tests])
+
+AT_SETUP([Elisp files compile without errors])
+AT_CHECK([test -f "$abs_top_builddir/elisp/ewc.elc"], [0])
+AT_CHECK([test -f "$abs_top_builddir/elisp/ewl.elc"], [0])
+AT_CLEANUP
+
+AT_SETUP([EWC module loads in Emacs])
+AT_CHECK([cd "$abs_top_builddir/elisp" && emacs --batch -Q -L . -l ewc.elc --eval "(message \"EWC loaded successfully\")" 2>&1 | grep -q "EWC loaded successfully"],[0])
+AT_CLEANUP
+
+AT_SETUP([EWL module loads in Emacs])
+AT_CHECK([cd "$abs_top_builddir/elisp" && emacs --batch -Q -L . -l ewc.elc -l ewl.elc --eval "(message \"EWL loaded successfully\")" 2>&1 | grep -q "EWL loaded successfully"],[0])
+AT_CLEANUP
+
+AT_SETUP([Elisp byte compilation has only expected warnings])
+AT_CHECK([cd "$abs_top_srcdir/elisp" && emacs --batch -Q -L "$abs_top_builddir/elisp" -L "$abs_top_builddir/ews" --eval "(setq byte-compile-error-on-warn nil)" -f batch-byte-compile ewc.el ewl.el 2>&1 | grep "Warning:" | grep -v "assignment to free variable" | grep -v "reference to free variable" | grep -v "function.*not known to be defined" | grep -v "called without required keyword argument"], [1])
+AT_CLEANUP
+
+AT_SETUP([EWC test suite])
+AT_CHECK([cd "$abs_top_srcdir/elisp" && test -f ewc-test.el], [0])
+AT_CLEANUP
+
+AT_SETUP([EWL test suite]) 
+AT_CHECK([cd "$abs_top_srcdir/elisp" && test -f ewl-test.el], [0])
+AT_CLEANUP

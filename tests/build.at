@@ -1,0 +1,23 @@
+AT_BANNER([Build System Tests])
+
+AT_SETUP([Autotools configuration])
+AT_CHECK([test -f "$abs_top_srcdir/configure"], [0])
+AT_CHECK([test -f "$abs_top_srcdir/Makefile"], [0])
+AT_CHECK([test -f "$abs_top_srcdir/ews/Makefile"], [0])
+AT_CHECK([test -f "$abs_top_srcdir/elisp/Makefile"], [0])
+AT_CLEANUP
+
+AT_SETUP([Protocol generation])
+AT_CHECK([test -f "$abs_top_builddir/ews/ewp-protocol.h"], [0])
+AT_CHECK([test -f "$abs_top_builddir/ews/ewp-protocol.c"], [0])
+AT_CHECK([test -f "$abs_top_builddir/ews/xdg-shell-protocol.h"], [0])
+AT_CLEANUP
+
+AT_SETUP([Binary compilation])
+AT_CHECK([test -x "$abs_top_builddir/ews/ews"], [0])
+AT_CLEANUP
+
+AT_SETUP([Elisp compilation])
+AT_CHECK([test -f "$abs_top_builddir/elisp/ewc.elc"], [0])
+AT_CHECK([test -f "$abs_top_builddir/elisp/ewl.elc"], [0])
+AT_CLEANUP

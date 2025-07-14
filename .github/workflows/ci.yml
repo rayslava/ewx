@@ -32,7 +32,8 @@ jobs:
           clang-tools \
           cppcheck \
           emacs-pgtk \
-          bear
+          bear \
+          libxml2-utils
 
     - name: Generate configure script
       run: |
