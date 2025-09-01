@@ -55,12 +55,13 @@
     <request name="layout">
       <description summary="Layout surface">
         Layout surface by setting its x and y position and its width and height size.
-        Shows the surface at x and y of its parent with width and height.
+        Shows the surface at x and y relative to the specified output with width and height.
       </description>
-      <arg name="x" type="uint" summary="x coordinate of window origin"/>
-      <arg name="y" type="uint" summary="y coordinate of window origin"/>
+      <arg name="x" type="uint" summary="x coordinate relative to output origin"/>
+      <arg name="y" type="uint" summary="y coordinate relative to output origin"/>
       <arg name="width" type="uint" summary="width of window"/>
       <arg name="height" type="uint" summary="height of window"/>
+      <arg name="output_id" type="uint" summary="target output ID (0 for primary)"/>
     </request>
 
     <request name="hide">

@@ -142,6 +142,7 @@
 
 (cl-defstruct (ewl-output (:constructor ewl-output-make)
                           (:copier nil))
+  (id nil :type natnum :documentation "Output ID assigned by server")
   (x nil :type natnum :documentation "Top left x coordinate in output layout")
   (y nil :type natnum :documentation "Top left y coordinate in output layout")
   (width nil :type natnum :documentation "Output width")
@@ -202,10 +203,13 @@
       (ewl-output-layout-frame output)
       t)))
 
+(defvar ewl-next-output-id 0 "Next output ID to assign.")
+
 (defun ewl-output-new (registry outputs name version)
   (cl-assert (eql version 4))
 
-  (let ((output (ewl-output-make)))
+  (let ((output (ewl-output-make :id ewl-next-output-id)))
+    (cl-incf ewl-next-output-id)
 
     (add-onetime-hook 'ewl-surface-functions (ewl-output-init-surface output))
 
@@ -213,7 +217,7 @@
           ;;             TODO: Pass env var/ integrate
           (make-frame '((display . "wayland-0"))))
 
-    (message "Made a frame")            ; DEBUG
+    (message "Made a frame for output ID %d" (ewl-output-id output)) ; DEBUG
     (message "terminals %s" (terminal-list))            ; DEBUG
 
     (let ((wl-output (ewc-object-add :objects (ewc-object-objects registry)
@@ -255,18 +259,18 @@
 ;; 1 layout frame surface on output
 (defun ewl-output-layout-frame (output)
   "Returns nil if OUTPUT can not be layed out yet."
-  (pcase-let (((cl-struct ewl-output surface
+  (pcase-let (((cl-struct ewl-output id surface
                           x y width height)
                output))
 
-    (message "Layout frame %s %s %s %s" x y width height) ; DEBUG
+    (message "Layout frame %s %s %s %s on output %d" x y width height id) ; DEBUG
     (when (and surface x y width height)
-      (ewl-layout surface x y width height)
-      (message "Layed out frame!")      ; DEBUG
+      (ewl-layout surface id 0 0 width height)
+      (message "Layed out frame on output %d!" id)      ; DEBUG
       )))
 
 ;; 2 layout surface on output (with offset)
-(defun ewl-output-layout-function (dx dy dheight)
+(defun ewl-output-layout-function (output-id dx dy dheight)
   ;; ewl-layout-on-output ?
   (lambda (object x y width height &optional inner-p)
     "If INNER-P layout in frames inner area, the area occupied by
@@ -274,10 +278,10 @@ windows including the minibuffer."
     ;; Offset for menu- and tool-bar
     ;; frame-outer-height could be used instead of dheight
     ;; but is same as frame-inner-height on pgtk. BUG?
-    (ewl-layout object (+ x dx) (+ y dy
-                                   (if inner-p
-                                       (- dheight (frame-inner-height))
-                                     0))
+    (ewl-layout object output-id (+ x dx) (+ y dy
+                                              (if inner-p
+                                                  (- dheight (frame-inner-height))
+                                                0))
                 width height)))
 ;; (setf (frame-parameter frame parameter) value)
 ;; -> Set ewl-output-layout-surface as layout-surface frame-parameter
@@ -307,7 +311,8 @@ windows including the minibuffer."
     ;; Update layout-surface function
     (when (or x y height)
       (setf (frame-parameter (ewl-output-frame output) 'layout-surface)
-            (ewl-output-layout-function (ewl-output-x output)
+            (ewl-output-layout-function (ewl-output-id output)
+                                        (ewl-output-x output)
                                         (ewl-output-y output)
                                         (ewl-output-height output))))
 
@@ -384,17 +389,19 @@ The function should return nil if it does not handle this surface.")
                                       app-id pid)))
 
 ;;; General layout function
-(defun ewl-layout (surface x y width height)
-  "Layout a ewp-SURFACE at X Y with WIDTH and HEIGHT."
+(defun ewl-layout (surface output-id x y width height)
+  "Layout a ewp-SURFACE on OUTPUT-ID at X Y with WIDTH and HEIGHT."
   (cl-assert (and (ewc-object-p surface)
+                  (natnump output-id)
                   (seq-every-p #'natnump (list x y width height))))
 
-  (message "Trying to layout surface id=%s %s %s %s %s"
+  (message "Trying to layout surface id=%s on output %d at %s %s %s %s"
            (ewc-object-id surface)
-           x y width height) ; DEBUG
+           output-id x y width height) ; DEBUG
 
   (ewc-request surface 'layout `((x . ,x) (y . ,y)
-                                 (width . ,width) (height . ,height))))
+                                 (width . ,width) (height . ,height)
+                                 (output-id . ,output-id))))
 
 (defun ewl-hide (surface)
   (ewc-request surface 'hide))
@@ -524,13 +531,13 @@ Add buffer-local to `window-selection-change-functions'."
 ;;; "Floating"
 ;; Hack for talk
 
-(defun ewl-buffer-float (buffer x y width height)
+(defun ewl-buffer-float (buffer output-id x y width height)
   (when-let ((window (car (alist-get buffer ewl-buffers))))
     (switch-to-next-buffer window))
   (redisplay)
   (with-current-buffer buffer
     (funcall (frame-parameter nil 'layout-surface)
-             ewl-buffer-surface x y width height t)))
+             ewl-buffer-surface output-id x y width height t)))
 
 ;;; Init
 (defun ewl-start-server ()

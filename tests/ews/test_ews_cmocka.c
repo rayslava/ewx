@@ -5,12 +5,16 @@
  * setup.
  */
 
+#include <setjmp.h>
 #include <stdarg.h>
 #include <stddef.h>
-#include <setjmp.h>
 #include <stdint.h>
 #include <string.h>
+
+/* Need to keep cmocka last to avoid missing declarations */
+/* clang-format off */
 #include <cmocka.h>
+/* clang-format on */
 
 /* Include the EWS utility functions */
 #include "ews_internal.h"
@@ -101,7 +105,7 @@ static void test_ewp_surface_handle_layout_parameters(void **state) {
    * which would require more complex mocking infrastructure. */
 
   /* For now, verify the function is properly linked and accessible */
-  void (*func_ptr)(struct wl_client *, struct wl_resource *, uint32_t, uint32_t,
+  void (*func_ptr)(struct wl_client *, struct wl_resource *, uint32_t, uint32_t, uint32_t,
                    uint32_t, uint32_t) = ewp_surface_handle_layout;
   assert_non_null(func_ptr);
 
@@ -128,9 +132,8 @@ static void test_surface_at_function_access(void **state) {
    * in the context of a compositor where the server is always initialized. */
 
   /* Test that the function is properly exposed and callable */
-  struct ews_surface *(*func_ptr)(struct ews_server *, double, double,
-                                  struct wlr_surface **, double *, double *) =
-      surface_at;
+  struct ews_surface *(*func_ptr)(struct ews_server *, double, double, struct wlr_surface **,
+                                  double *, double *) = surface_at;
   assert_non_null(func_ptr);
 
   /* The real defensive programming in surface_at happens after the scene graph

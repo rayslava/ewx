@@ -40,16 +40,14 @@ struct wlr_surface;
 struct ews_surface;
 
 /* Functions from ews.c that can be tested safely */
-void focus_surface(struct ews_surface *ews_surface,
-                   const struct wlr_surface *surface);
+void focus_surface(struct ews_surface *ews_surface, const struct wlr_surface *surface);
 
 /* Forward declaration for server struct */
 struct ews_server;
 
 /* Surface lookup function with defensive programming patterns */
 struct ews_surface *surface_at(struct ews_server *server, double lx, double ly,
-                               struct wlr_surface **surface, double *sx,
-                               double *sy);
+                               struct wlr_surface **surface, double *sx, double *sy);
 
 #endif /* EWS_TESTING */
 
@@ -74,15 +72,13 @@ struct ews_surface;
 #include <wayland-server.h>
 
 /* From ews.c - protocol handlers that we can test */
-void ewp_surface_handle_layout(struct wl_client *client,
-                               struct wl_resource *resource, uint32_t x,
-                               uint32_t y, uint32_t width, uint32_t height);
+void ewp_surface_handle_layout(struct wl_client *client, struct wl_resource *resource,
+                               uint32_t x, uint32_t y, uint32_t width, uint32_t height,
+                               uint32_t output_id);
 
-void ewp_surface_handle_hide(struct wl_client *client,
-                             struct wl_resource *resource);
+void ewp_surface_handle_hide(struct wl_client *client, struct wl_resource *resource);
 
-void ewp_surface_handle_focus(struct wl_client *client,
-                              struct wl_resource *resource);
+void ewp_surface_handle_focus(struct wl_client *client, struct wl_resource *resource);
 
 #endif /* EWS_TESTING */
 
