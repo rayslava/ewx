@@ -30,7 +30,8 @@ tidy:
 
 pre-commit:
 	@echo "Formatting C/C++ files..."
-	@find . -type f \( -name '*.c' -o -name '*.h' \) -exec clang-format -style=Google -i {} \;
+	@find . -type f \( -name '*.c' -o -name '*.h' \) -exec clang-format --style=GNU --style=file:.clang-format -i {} \;
+	@git diff --cached --check
 
 unit-test:
 	$(MAKE) -C tests unit-test

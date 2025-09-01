@@ -9,8 +9,13 @@
 
 (source 'gnu)
 (source 'melpa)
+(source 'jcs-elpa)
 
 (depends-on "emacs" "26.1")
-(depends-on "elsa" )
+(depends-on "xdg")
+
+(development
+ (depends-on "ellsp")
+ (depends-on "elsa"))
 
 (files "ewc.el" "ewl.el" "ewc-test.el" "ewl-test.el")
