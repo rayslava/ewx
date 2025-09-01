@@ -40,6 +40,11 @@
 
 (require 'ewl)
 
+(progn
+  (ewl-init t)
+  (sleep-for 3)
+  (ewl-start-client "wayland-0"))
+
 (provide 'ewx)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

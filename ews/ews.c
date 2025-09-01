@@ -1,6 +1,7 @@
 /* ews.c --- Emacs wayland server
 
    Copyright (C) 2023  Michael Bauer
+                 2025  Slava Barinov
 
    Author: Michael Bauer <michael-bauer@posteo.de>
 
@@ -100,6 +101,7 @@ struct ews_output {
   struct wl_list link;
   struct ews_server *server;
   struct wlr_output *wlr_output;
+  struct wlr_scene *scene; /* Per-output scene for independent content */
   struct wl_listener frame;
   struct wl_listener destroy;
 };
@@ -316,31 +318,54 @@ static void seat_request_set_selection(struct wl_listener *listener, void *data)
 EWS_STATIC struct ews_surface *surface_at(struct ews_server *server, double lx, double ly,
                                           struct wlr_surface **surface, double *sx,
                                           double *sy) {
-  /* This returns the topmost node in the scene at the given layout coords.
-   * we only care about surface nodes as we are specifically looking for a
-   * surface in the surface tree of a ews_surface. */
-  struct wlr_scene_node *node = wlr_scene_node_at(&server->scene->tree.node, lx, ly, sx, sy);
-  if (node == NULL || node->type != WLR_SCENE_NODE_BUFFER) {
-    return NULL;
-  }
-  struct wlr_scene_buffer *scene_buffer = wlr_scene_buffer_from_node(node);
-  const struct wlr_scene_surface *scene_surface =
-      wlr_scene_surface_try_from_buffer(scene_buffer);
-  if (!scene_surface) {
-    return NULL;
+  /* Search through all per-output scenes to find surface at cursor position.
+   * Each output has its own independent scene with local coordinates. */
+  struct ews_output *output;
+  wl_list_for_each(output, &server->outputs, link) {
+    if (!output->scene) {
+      continue;
+    }
+
+    /* Transform global layout coordinates to output-local coordinates */
+    struct wlr_box output_box;
+    wlr_output_layout_get_box(server->output_layout, output->wlr_output, &output_box);
+
+    double local_x = lx - output_box.x;
+    double local_y = ly - output_box.y;
+
+    /* Check if cursor is within this output's bounds */
+    if (local_x < 0 || local_y < 0 || local_x >= output_box.width ||
+        local_y >= output_box.height) {
+      continue;
+    }
+
+    struct wlr_scene_node *node =
+        wlr_scene_node_at(&output->scene->tree.node, local_x, local_y, sx, sy);
+    if (node == NULL || node->type != WLR_SCENE_NODE_BUFFER) {
+      continue;
+    }
+
+    struct wlr_scene_buffer *scene_buffer = wlr_scene_buffer_from_node(node);
+    const struct wlr_scene_surface *scene_surface =
+        wlr_scene_surface_try_from_buffer(scene_buffer);
+    if (!scene_surface) {
+      continue;
+    }
+
+    *surface = scene_surface->surface;
+    /* Find the node corresponding to the ews_surface at the root of this
+     * surface tree, it is the only one for which we set the data field. */
+    struct wlr_scene_tree *tree = node->parent;
+    while (tree != NULL && tree->node.data == NULL) {
+      tree = tree->node.parent;
+    }
+    if (tree) {
+      return tree->node.data;
+    }
   }
 
-  *surface = scene_surface->surface;
-  /* Find the node corresponding to the ews_surface at the root of this
-   * surface tree, it is the only one for which we set the data field. */
-  struct wlr_scene_tree *tree = node->parent;
-  while (tree != NULL && tree->node.data == NULL) {
-    tree = tree->node.parent;
-  }
-  if (!tree) {
-    return NULL;
-  }
-  return tree->node.data;
+  /* No surface found in any output scene */
+  return NULL;
 }
 
 static void process_cursor_motion(struct ews_server *server, uint32_t time) {
@@ -348,7 +373,10 @@ static void process_cursor_motion(struct ews_server *server, uint32_t time) {
   double sx, sy;
   struct wlr_seat *seat = server->seat;
   struct wlr_surface *surface = NULL;
-  surface_at(server, server->cursor->x, server->cursor->y, &surface, &sx, &sy);
+  struct ews_surface *ews_surface =
+      surface_at(server, server->cursor->x, server->cursor->y, &surface, &sx, &sy);
+  wlr_log(WLR_DEBUG, "Cursor at (%.1f,%.1f) -> %s (sx=%.1f sy=%.1f)", server->cursor->x,
+          server->cursor->y, surface ? "on-surface" : "no-surface", sx, sy);
   if (!surface) {
     /* If there's no view under the cursor, set the cursor image to a
      * default. This is what makes the cursor image appear when you move it
@@ -445,7 +473,7 @@ static void output_frame(struct wl_listener *listener, __attribute__((unused)) v
   /* This function is called every time an output is ready to display a frame,
    * generally at the output's refresh rate (e.g. 60Hz). */
   struct ews_output *output = wl_container_of(listener, output, frame);
-  struct wlr_scene *scene = output->server->scene;
+  struct wlr_scene *scene = output->scene; /* Use output's own scene */
 
   struct wlr_scene_output *scene_output = wlr_scene_get_scene_output(scene, output->wlr_output);
 
@@ -455,8 +483,14 @@ static void output_frame(struct wl_listener *listener, __attribute__((unused)) v
       wlr_log(WLR_DEBUG, "Scene output is NULL, skipping frame");
       return;
     }
-    wlr_log(WLR_INFO, "Created scene output in frame handler");
+    wlr_log(WLR_INFO, "Created scene output for %s", output->wlr_output->name);
   }
+
+  struct wlr_box obox;
+  wlr_output_layout_get_box(output->server->output_layout, output->wlr_output, &obox);
+  wlr_log(WLR_DEBUG, "Committing scene for output %s layout box=(%d,%d %dx%d)",
+          output->wlr_output->name ? output->wlr_output->name : "unknown", obox.x, obox.y,
+          obox.width, obox.height);
 
   /* Render the scene if needed and commit the output */
   wlr_scene_output_commit(scene_output, NULL);
@@ -468,6 +502,11 @@ static void output_frame(struct wl_listener *listener, __attribute__((unused)) v
 
 static void output_destroy(struct wl_listener *listener, __attribute__((unused)) void *data) {
   struct ews_output *output = wl_container_of(listener, output, destroy);
+
+  /* Destroy the per-output scene */
+  if (output->scene) {
+    wlr_scene_node_destroy(&output->scene->tree.node);
+  }
 
   wl_list_remove(&output->frame.link);
   wl_list_remove(&output->destroy.link);
@@ -504,6 +543,14 @@ static void server_new_output(struct wl_listener *listener, void *data) {
   output->wlr_output = wlr_output;
   output->server = server;
 
+  /* Create per-output scene for independent content */
+  output->scene = wlr_scene_create();
+  if (!output->scene) {
+    wlr_log(WLR_ERROR, "Failed to create scene for output");
+    free(output);
+    return;
+  }
+
   /* Calculate output index for logging */
   uint32_t output_index = 0;
   struct ews_output *existing;
@@ -520,7 +567,11 @@ static void server_new_output(struct wl_listener *listener, void *data) {
   output->destroy.notify = output_destroy;
   wl_signal_add(&wlr_output->events.destroy, &output->destroy);
 
-  wl_list_insert(&server->outputs, &output->link);
+  /* Insert at the tail so indices are stable and match wl_output
+   * advertisement order. Inserting at the head would reverse the
+   * order relative to client-visible globals and break output-id
+   * mapping in our custom protocol. */
+  wl_list_insert(server->outputs.prev, &output->link);
 
   /* Adds this to the output layout. The add_auto function arranges outputs
    * from left-to-right in the order they appear. A more sophisticated
@@ -537,8 +588,13 @@ static void server_new_output(struct wl_listener *listener, void *data) {
 static void layout_surface(struct ews_surface *surface) {
   /* Add scene_tree for surface if missing */
   if (surface->scene_tree == NULL) {
-    surface->scene_tree = wlr_scene_xdg_surface_create(&surface->server->scene->tree,
-                                                       surface->xdg_toplevel->base);
+    /* Create surface in target output's scene for independent content */
+    struct wlr_scene_tree *parent_tree = surface->target_output
+                                             ? &surface->target_output->scene->tree
+                                             : &surface->server->scene->tree;
+
+    surface->scene_tree =
+        wlr_scene_xdg_surface_create(parent_tree, surface->xdg_toplevel->base);
     /* For surface_at */
     surface->scene_tree->node.data = surface;
     /* For popup */
@@ -650,11 +706,21 @@ EWS_STATIC void ewp_surface_handle_layout(__attribute__((unused)) struct wl_clie
   wlr_output_layout_get_box(surface->server->output_layout, target_output->wlr_output,
                             &output_box);
 
-  surface->x = output_box.x + x;
-  surface->y = output_box.y + y;
+  wlr_log(WLR_DEBUG, "Target output name=%s box=(x=%d y=%d w=%d h=%d)",
+          target_output->wlr_output && target_output->wlr_output->name
+              ? target_output->wlr_output->name
+              : "unknown",
+          output_box.x, output_box.y, output_box.width, output_box.height);
+
+  /* Place surface in local output coordinates (per-output scene) */
+  surface->x = (int)x;
+  surface->y = (int)y;
   surface->width = width;
   surface->height = height;
   surface->target_output = target_output;
+
+  wlr_log(WLR_DEBUG, "Computed scene pos=(%d,%d) size=(%dx%d) for output_id=%d", surface->x,
+          surface->y, surface->width, surface->height, output_id);
   if (surface->mapped) {
     layout_surface(surface);
   }

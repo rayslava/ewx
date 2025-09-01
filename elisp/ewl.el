@@ -150,7 +150,8 @@
   (name nil :type string :documentation "Output name")
   (description nil :type string :documentation "Output description")
   (frame nil :type frame :documentation "Linked frame")
-  (surface nil :type ewc-object :documentation "Surface of linked frame"))
+  (surface nil :type ewc-object :documentation "Surface of linked frame")
+  (pending nil :type list :documentation "Pending property updates from xdg-output events"))
 
 ;; TODO: Abstract; this is simple listener free version.
 (defun ewl-output-xdg-manager (registry name version)
@@ -165,18 +166,25 @@
                                   (id . ,(ewc-object-id xdg-output-manager))))
     xdg-output-manager))
 
-(let ((update))
-  (defun ewl-output-listener (event)
-    (pcase event
-      ((or 'logical-position 'logical-size 'name 'description)
-       (lambda (_object values)
-         (push values update)))
-      ('done
-       (lambda (object _values)
-         (let ((update (apply #'nconc update)))
-           (message "Received update: %s" update) ; DEBUG
-           (ewl-output-update (ewc-object-data object) update))
-         (setq update nil))))))
+(defun ewl-output-listener (event)
+  (pcase event
+    ;; Accumulate per-output updates on the associated ewl-output
+    ((or 'logical-position 'logical-size 'name 'description)
+     (lambda (object values)
+       (let* ((output (ewc-object-data object))
+              (pending (ewl-output-pending output)))
+         (push values pending)
+         (setf (ewl-output-pending output) pending))))
+    ;; Apply the accumulated updates when wl_output emits 'done
+    ('done
+     (lambda (object _values)
+       (let* ((output (ewc-object-data object))
+              (pending (ewl-output-pending output)))
+         (when pending
+           (let ((update (apply #'nconc pending)))
+             (message "Received update: %s" update) ; DEBUG
+             (ewl-output-update output update)
+             (setf (ewl-output-pending output) nil))))))))
 
 ;; Forward declaration for closure-defined function
 (declare-function ewl-output-listener "ewl")
@@ -190,20 +198,56 @@
     (setf (ewc-listener-global objects 'xdg-output-unstable-v1 'zxdg-output-v1 event)
           (ewl-output-listener event))))
 
-(defun ewl-output-init-surface (output)
-  (lambda (surface _app-id pid)
-    (message "Init with pid %s=%s?" pid (emacs-pid))            ; DEBUG
-    (when (eql pid (emacs-pid))
-      (message "Init with pid %s!" pid) ; DEBUG
+(defvar ewl-next-output-id 0 "Next output ID to assign.")
+(defvar ewl-unassigned-outputs nil "List of outputs waiting for surface assignment.")
+(defvar ewl-output-workspaces (make-hash-table) "Hash table mapping output-id to current workspace buffer.")
+(defvar ewl-frame-workspaces (make-hash-table :weakness 'key) "Hash table mapping frame to its workspace buffer.")
+(defvar ewl-workspace-frames (make-hash-table :weakness 'value) "Hash table mapping workspace buffer to its frame.")
+
+(defun ewl-assign-surface-to-output (surface _app-id pid)
+  "Assign a surface to the first available unassigned output."
+  (message "Trying to assign surface with pid %s=%s?" pid (emacs-pid)) ; DEBUG
+  (when (and (eql pid (emacs-pid))
+             ewl-unassigned-outputs)
+    (let ((output (pop ewl-unassigned-outputs)))
+      (message "Assigning surface to output ID %d!" (ewl-output-id output)) ; DEBUG
       (setf (ewl-output-surface output) surface)
-      ;; frame-parameter is used by ewl-buffer-focus
-      ;; TODO: Use frame-parameters for output handling?
       (setf (frame-parameter (ewl-output-frame output) 'ewl-surface) surface)
       ;; Try to layout frame. Succeeds when x y width height are already set.
       (ewl-output-layout-frame output)
       t)))
 
-(defvar ewl-next-output-id 0 "Next output ID to assign.")
+(defun ewl-output-set-workspace (output-id buffer)
+  "Set the workspace buffer for OUTPUT-ID."
+  (puthash output-id buffer ewl-output-workspaces)
+  (message "Set workspace for output %d to buffer %s" output-id (buffer-name buffer)))
+
+(defun ewl-bind-workspace-to-frame (frame workspace)
+  "Exclusively bind WORKSPACE buffer to FRAME."
+  (puthash frame workspace ewl-frame-workspaces)
+  (puthash workspace frame ewl-workspace-frames)
+  (message "Bound workspace %s exclusively to frame %s" (buffer-name workspace) frame))
+
+(defun ewl-output-get-workspace (output-id)
+  "Get the current workspace buffer for OUTPUT-ID, creating one if needed."
+  (or (gethash output-id ewl-output-workspaces)
+      (let ((workspace (generate-new-buffer (format "*Output-%d-Desktop*" output-id))))
+        (with-current-buffer workspace
+          (insert (format "=== Output %d Independent Desktop ===\n\n" output-id))
+          (insert (format "This is an INDEPENDENT desktop for Output %d.\n" output-id))  
+          (insert (format "Output %d has its own isolated workspace.\n\n" output-id))
+          (insert "Features:\n")
+          (insert "- Independent buffer management\n")
+          (insert "- Frame-local workspace isolation\n") 
+          (insert "- Separate from other monitors\n\n")
+          (insert (format "Current time: %s\n" (current-time-string)))
+          (insert (format "Frame: This workspace is bound to Output %d frame\n\n" output-id))
+          (insert "Try opening different files or buffers on each monitor!\n")
+          ;; Make buffer locally frame-bound
+          (setq-local ewl-bound-output-id output-id)
+          (setq-local ewl-frame-local-workspace t))
+        (puthash output-id workspace ewl-output-workspaces)
+        workspace)))
 
 (defun ewl-output-new (registry outputs name version)
   (cl-assert (eql version 4))
@@ -211,11 +255,17 @@
   (let ((output (ewl-output-make :id ewl-next-output-id)))
     (cl-incf ewl-next-output-id)
 
-    (add-onetime-hook 'ewl-surface-functions (ewl-output-init-surface output))
+    ;; Add output to unassigned list for surface assignment (append to maintain order)
+    (setq ewl-unassigned-outputs (append ewl-unassigned-outputs (list output)))
 
+    ;; Create frame with simple unique identification
     (setf (ewl-output-frame output)
-          ;;             TODO: Pass env var/ integrate
-          (make-frame '((display . "wayland-0"))))
+          (make-frame `((display . "wayland-0")
+                        (ewl-output-id . ,(ewl-output-id output))
+                        (left . ,(* (ewl-output-id output) 100))  ; Offset each frame
+                        (top . 0)
+                        (width . 100)   ; Initial size, will be updated
+                        (height . 50))))
 
     (message "Made a frame for output ID %d" (ewl-output-id output)) ; DEBUG
     (message "terminals %s" (terminal-list))            ; DEBUG
@@ -239,7 +289,9 @@
 
         (ewc-request (ewl-outputs-xdg-output-manager outputs)
                      'get-xdg-output `((id . ,(ewc-object-id xdg-output))
-                                       (output . ,(ewc-object-id wl-output)))))
+                                       (output . ,(ewc-object-id wl-output))))
+        ;; Bind xdg-output object to this ewl-output for per-output updates
+        (setf (ewc-object-data xdg-output) output))
 
       output)))
 
@@ -308,13 +360,42 @@ windows including the minibuffer."
     (when name (setf (ewl-output-name output) name))
     (when description (setf (ewl-output-description output) description))
 
-    ;; Update layout-surface function
-    (when (or x y height)
-      (setf (frame-parameter (ewl-output-frame output) 'layout-surface)
-            (ewl-output-layout-function (ewl-output-id output)
-                                        (ewl-output-x output)
-                                        (ewl-output-y output)
-                                        (ewl-output-height output))))
+    ;; Update frame parameters with output geometry
+    (let ((frame (ewl-output-frame output)))
+      (when x (setf (frame-parameter frame 'ewl-output-x) x))
+      (when y (setf (frame-parameter frame 'ewl-output-y) y))
+      (when width (setf (frame-parameter frame 'ewl-output-width) width))
+      (when height (setf (frame-parameter frame 'ewl-output-height) height))
+      (when name (setf (frame-parameter frame 'ewl-output-name) name))
+      
+      ;; Update frame size to match output dimensions
+      (when (and width height)
+        (message "Updating frame size to %dx%d for output %d (frame: %s)" width height (ewl-output-id output) frame) ; DEBUG
+        (let ((target-cols (/ width (frame-char-width frame)))
+              (target-rows (/ height (frame-char-height frame))))
+          (message "Target size: %dx%d chars, current: %dx%d" target-cols target-rows (frame-width frame) (frame-height frame)) ; DEBUG
+          ;; Only resize if significantly different to avoid constant adjustments
+          (unless (and (< (abs (- (frame-width frame) target-cols)) 5)
+                       (< (abs (- (frame-height frame) target-rows)) 5))
+            (message "Resizing frame %s to %dx%d chars" frame target-cols target-rows) ; DEBUG
+            (set-frame-size frame target-cols target-rows))
+          
+          ;; Initialize workspace for this output when geometry is available
+          (let ((workspace (ewl-output-get-workspace (ewl-output-id output))))
+            (message "Setting workspace %s for output %d on frame %s" (buffer-name workspace) (ewl-output-id output) frame) ; DEBUG
+            ;; Bind workspace exclusively to this frame
+            (ewl-bind-workspace-to-frame frame workspace)
+            ;; Initialize frame with its workspace
+            (with-selected-frame frame
+              (switch-to-buffer workspace)))))
+      
+      ;; Update layout-surface function
+      (when (or x y height)
+        (setf (frame-parameter frame 'layout-surface)
+              (ewl-output-layout-function (ewl-output-id output)
+                                          (ewl-output-x output)
+                                          (ewl-output-y output)
+                                          (ewl-output-height output)))))
 
     ;; Update output frame layout
     (when (or x y width height)
@@ -357,7 +438,41 @@ windows including the minibuffer."
 
 (defun ewl-surface-focus (surface _args)
   (when-let ((buffer (ewc-object-data surface)))
-    (select-window (car (alist-get buffer ewl-buffers)))))
+    (select-window (car (alist-get buffer ewl-buffers))))
+  
+  ;; Find the frame associated with this surface and ensure workspace isolation
+  (let ((frame (cl-loop for frame in (frame-list)
+                        when (eq surface (frame-parameter frame 'ewl-surface))
+                        return frame)))
+    (when frame
+      (message "Focus: selecting frame %s (output %s)" frame (frame-parameter frame 'ewl-output-id)) ; DEBUG
+      ;; Restore frame's exclusive workspace before focusing
+      (ewl-restore-frame-workspace frame)
+      ;; Set focus to this frame
+      (select-frame-set-input-focus frame))))
+
+(defun ewl-restore-frame-workspace (frame)
+  "Restore FRAME's exclusive workspace, preventing cross-frame contamination."
+  (let ((workspace (gethash frame ewl-frame-workspaces)))
+    (when workspace
+      (message "Focus: restoring exclusive workspace %s to frame %s" (buffer-name workspace) frame) ; DEBUG
+      (with-selected-frame frame
+        ;; Force the frame to show its exclusive workspace
+        (switch-to-buffer workspace)
+        ;; Set as current buffer in this frame context
+        (set-window-buffer (selected-window) workspace)))))
+
+(defun ewl-maintain-workspace-isolation ()
+  "Hook to maintain workspace isolation across all frames."
+  (dolist (frame (frame-list))
+    (let ((workspace (gethash frame ewl-frame-workspaces)))
+      (when (and workspace 
+                 (frame-live-p frame)
+                 (not (eq (selected-frame) frame))) ; Don't interfere with current frame
+        ;; Ensure non-current frames show their exclusive workspaces
+        (with-selected-frame frame
+          (when (not (eq (current-buffer) workspace))
+            (set-window-buffer (selected-window) workspace)))))))
 
 (defun ewl-surface-init (objects)
   (setf (ewc-listener-global objects 'emacs-wayland-protocol 'ewp-surface 'destroy)
@@ -367,7 +482,7 @@ windows including the minibuffer."
   (setf (ewc-listener-global objects 'emacs-wayland-protocol 'ewp-surface 'focus)
         #'ewl-surface-focus))
 
-(defvar ewl-surface-functions (list #'ewl-buffer-init)
+(defvar ewl-surface-functions (list #'ewl-assign-surface-to-output #'ewl-buffer-init)
   "Abnormal hook. Run if new surface requests a layout.
 Each function is passed surface, app-id and pid as arguments
 The function should return nil if it does not handle this surface.")
@@ -622,6 +737,10 @@ looks up protocol in library."
         window-resize-pixelwise t)
 
   (add-hook 'window-size-change-functions #'ewl-update-frame)
+  
+  ;; Add workspace isolation maintenance 
+  (add-hook 'buffer-list-update-hook #'ewl-maintain-workspace-isolation)
+  (add-hook 'window-configuration-change-hook #'ewl-maintain-workspace-isolation)
 
   (when server-p                        ; DEBUG
     (ewl-start-server)))
