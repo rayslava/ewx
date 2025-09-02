@@ -321,20 +321,11 @@
       (message "Layed out frame on output %d!" id)      ; DEBUG
       )))
 
-;; 2 layout surface on output (with offset)
-(defun ewl-output-layout-function (output-id dx dy dheight)
-  ;; ewl-layout-on-output ?
-  (lambda (object x y width height &optional inner-p)
-    "If INNER-P layout in frames inner area, the area occupied by
-windows including the minibuffer."
-    ;; Offset for menu- and tool-bar
-    ;; frame-outer-height could be used instead of dheight
-    ;; but is same as frame-inner-height on pgtk. BUG?
-    (ewl-layout object output-id (+ x dx) (+ y dy
-                                              (if inner-p
-                                                  (- dheight (frame-inner-height))
-                                                0))
-                width height)))
+;; 2 layout surface on output (frame-relative coordinates)
+(defun ewl-output-layout-function (output-id dx dy _dheight)
+  ;; In Wayland+PGTK, window coords are already frame-relative (= output-local), no conversion needed.
+  (lambda (object x y width height &optional _inner-p)
+    (ewl-layout object output-id x y width height)))
 ;; (setf (frame-parameter frame parameter) value)
 ;; -> Set ewl-output-layout-surface as layout-surface frame-parameter
 
@@ -523,13 +514,32 @@ The function should return nil if it does not handle this surface.")
 
 (defun ewl-buffer-layout (&optional window)
   "Layout current wayland buffer on current window or WINDOW."
-  (pcase-let ((`(,left ,top ,right ,bottom) (window-absolute-body-pixel-edges window)))
-    (message "Update layout %s %s %s %s" left top right bottom)
+  (pcase-let* ((`(,left ,top ,right ,bottom) (window-absolute-pixel-edges window))
+               ;; Check if window is at frame top - if so, add offset for frame decorations
+               (frame-top (frame-parameter nil 'top))
+               (window-at-frame-top-p (= top 0))
+               ;; Get various frame measurements
+               (menu-bar-height (if (and menu-bar-mode (> (frame-parameter nil 'menu-bar-lines) 0))
+                                   (* (frame-parameter nil 'menu-bar-lines) (frame-char-height))
+                                 0))
+               (tool-bar-height (if (and tool-bar-mode (> (frame-parameter nil 'tool-bar-lines) 0))
+                                   (* (frame-parameter nil 'tool-bar-lines) (frame-char-height))
+                                 0))
+               ;; Title bar height - estimate from display system
+               (title-bar-height (if window-at-frame-top-p 30 0)) ; typical title bar
+               (total-top-offset (+ menu-bar-height tool-bar-height title-bar-height))
+               ;; Use the exact buffer window dimensions from window-inside-absolute-pixel-edges
+               (rel-left left)
+               (rel-top (+ top total-top-offset))
+               (width (- right left))
+               (height (- bottom top)))
+    (message "Update layout full-window:%s,%s,%s,%s top-offset:%s rel:%s,%s,%s,%s" 
+             left top right bottom total-top-offset rel-left rel-top width height)
 
     (funcall (frame-parameter nil 'layout-surface)
              ewl-buffer-surface
-             left top
-             (- right left) (- bottom top)
+             rel-left rel-top
+             width height
              t)))
 
 ;; Update frame & windows
