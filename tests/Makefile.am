@@ -1,40 +1,33 @@
-# Initialize variables
 check_PROGRAMS =
 TESTS =
 
-# Temporarily disable old Check tests during CMocka transition
-#if HAVE_CHECK
-#check_PROGRAMS += ews/test_ews
-#TESTS += ews/test_ews
-#
-#ews_test_ews_SOURCES = ews/test_ews.c
-#ews_test_ews_CPPFLAGS = -I$(top_srcdir)/ews $(WLROOTS_CFLAGS) $(WAYLAND_SERVER_CFLAGS) $(XKBCOMMON_CFLAGS) -DWLR_USE_UNSTABLE
-#ews_test_ews_CFLAGS = -std=c2x -Wall -Wextra -pedantic $(CHECK_CFLAGS) $(COVERAGE_CFLAGS)
-#ews_test_ews_LDADD = $(CHECK_LIBS) $(top_builddir)/ews/ews-ews_utils.o
-#ews_test_ews_LDFLAGS = $(COVERAGE_LDFLAGS)
-#endif
-
 if HAVE_CMOCKA
-check_PROGRAMS += ews/test_ews_cmocka
-TESTS += ews/test_ews_cmocka
+check_PROGRAMS += ews/test_ews_cmocka ews/test_ews_headless ews/test_ews_input
+TESTS += ews/test_ews_cmocka ews/test_ews_headless ews/test_ews_input
 
-ews_test_ews_cmocka_SOURCES = ews/test_ews_cmocka.c \
-    $(top_srcdir)/ews/ews_main.c \
+AM_CPPFLAGS = -I$(top_builddir)/ews -I$(top_srcdir)/ews $(WLROOTS_CFLAGS) $(WAYLAND_SERVER_CFLAGS) $(XKBCOMMON_CFLAGS) -DWLR_USE_UNSTABLE -DEWS_TESTING
+AM_CFLAGS = -std=c2x -Wall -Wextra -pedantic $(CMOCKA_CFLAGS) $(COVERAGE_CFLAGS)
+AM_LDFLAGS = $(COVERAGE_LDFLAGS)
+
+EWS_LIBS = $(CMOCKA_LIBS) $(WLROOTS_LIBS) $(WAYLAND_SERVER_LIBS) $(XKBCOMMON_LIBS)
+EWS_MODULES = \
     $(top_srcdir)/ews/ews_input.c \
     $(top_srcdir)/ews/ews_cursor.c \
     $(top_srcdir)/ews/ews_output.c \
     $(top_srcdir)/ews/ews_surface.c \
     $(top_srcdir)/ews/ews_ewp.c \
     $(top_srcdir)/ews/ewp-protocol.c
-ews_test_ews_cmocka_CPPFLAGS = -I$(top_srcdir)/ews -I$(top_builddir)/ews $(WLROOTS_CFLAGS) $(WAYLAND_SERVER_CFLAGS) $(XKBCOMMON_CFLAGS) -DWLR_USE_UNSTABLE -DEWS_TESTING
-ews_test_ews_cmocka_CFLAGS = -std=c2x -Wall -Wextra -pedantic $(CMOCKA_CFLAGS) $(COVERAGE_CFLAGS)
-ews_test_ews_cmocka_LDADD = $(CMOCKA_LIBS) $(WLROOTS_LIBS) $(WAYLAND_SERVER_LIBS) $(XKBCOMMON_LIBS)
-ews_test_ews_cmocka_LDFLAGS = $(COVERAGE_LDFLAGS)
+
+ews_test_ews_cmocka_SOURCES = ews/test_ews_cmocka.c $(top_srcdir)/ews/ews_main.c $(EWS_MODULES)
+ews_test_ews_cmocka_LDADD = $(EWS_LIBS)
+
+ews_test_ews_headless_SOURCES = ews/test_ews_headless.c $(EWS_MODULES)
+ews_test_ews_headless_LDADD = $(EWS_LIBS)
+
+ews_test_ews_input_SOURCES = ews/test_ews_input.c $(EWS_MODULES)
+ews_test_ews_input_LDADD = $(EWS_LIBS)
 endif
 
-unit-test:
-	@echo "Running C unit tests..."
-	./ews/test_ews
 
 TESTSUITE = $(srcdir)/testsuite
 EXTRA_DIST = testsuite.at build.at ews.at elisp.at protocols.at package.m4 $(TESTSUITE) ews/test_ews.c
