@@ -1,4 +1,4 @@
-/* ews_internal.h --- Emacs wayland server internal function declarations
+/* ews_output.h --- Emacs wayland server output management
 
    Copyright (C) 2023  Michael Bauer
                  2025  Slava Barinov
@@ -19,29 +19,15 @@
    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef EWS_INTERNAL_H
-#define EWS_INTERNAL_H
+#ifndef EWS_OUTPUT_H
+#define EWS_OUTPUT_H
 
 #include "ews_types.h"
 
-/* Conditional visibility for testing - make static functions testable */
-#ifdef EWS_TESTING
-#define EWS_STATIC
-#else
-#define EWS_STATIC static
-#endif
+/* Output event handlers */
+void server_new_output(struct wl_listener *listener, void *data);
 
-/* Cross-module function declarations - only non-static functions */
-
-/* ews_surface.c */
-void focus_surface(struct ews_surface *ews_surface, const struct wlr_surface *surface);
-void layout_surface(struct ews_surface *surface);
-
-/* ews_cursor.c */
-struct ews_surface *surface_at(struct ews_server *server, double lx, double ly,
-                               struct wlr_surface **surface, double *sx, double *sy);
-
-/* ews_output.c */
+/* Output utility functions */
 struct ews_output *find_output_by_index(struct ews_server *server, uint32_t output_index);
 
-#endif /* EWS_INTERNAL_H */
+#endif /* EWS_OUTPUT_H */

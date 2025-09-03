@@ -16,7 +16,12 @@ xdg-shell-protocol.h:
 		$(WAYLAND_PROTOCOLS_DATADIR)/stable/xdg-shell/xdg-shell.xml $@
 
 ews_SOURCES = \
-    ews.c \
+    ews_main.c \
+    ews_input.c \
+    ews_cursor.c \
+    ews_output.c \
+    ews_surface.c \
+    ews_ewp.c \
     ewp-protocol.c
 
 nodist_ews_SOURCES = \
@@ -60,12 +65,12 @@ cppcheck:
 		$(WAYLAND_SERVER_CFLAGS) \
 		$(XKBCOMMON_CFLAGS) \
 		-DWLR_USE_UNSTABLE \
-		$(srcdir)/ews.c
+		$(srcdir)/ews_*.c
 
 tidy: $(BUILT_SOURCES)
 	$(MAKE) clean-local
 	bear -- $(MAKE) ews
-	clang-tidy $(srcdir)/ews.c
+	clang-tidy $(srcdir)/ews_*.c
 
 scan-build: clean-local
 	@echo "Running clang static analyzer..."

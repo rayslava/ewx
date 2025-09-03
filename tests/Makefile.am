@@ -18,7 +18,14 @@ if HAVE_CMOCKA
 check_PROGRAMS += ews/test_ews_cmocka
 TESTS += ews/test_ews_cmocka
 
-ews_test_ews_cmocka_SOURCES = ews/test_ews_cmocka.c $(top_srcdir)/ews/ews.c $(top_srcdir)/ews/ewp-protocol.c
+ews_test_ews_cmocka_SOURCES = ews/test_ews_cmocka.c \
+    $(top_srcdir)/ews/ews_main.c \
+    $(top_srcdir)/ews/ews_input.c \
+    $(top_srcdir)/ews/ews_cursor.c \
+    $(top_srcdir)/ews/ews_output.c \
+    $(top_srcdir)/ews/ews_surface.c \
+    $(top_srcdir)/ews/ews_ewp.c \
+    $(top_srcdir)/ews/ewp-protocol.c
 ews_test_ews_cmocka_CPPFLAGS = -I$(top_srcdir)/ews -I$(top_builddir)/ews $(WLROOTS_CFLAGS) $(WAYLAND_SERVER_CFLAGS) $(XKBCOMMON_CFLAGS) -DWLR_USE_UNSTABLE -DEWS_TESTING
 ews_test_ews_cmocka_CFLAGS = -std=c2x -Wall -Wextra -pedantic $(CMOCKA_CFLAGS) $(COVERAGE_CFLAGS)
 ews_test_ews_cmocka_LDADD = $(CMOCKA_LIBS) $(WLROOTS_LIBS) $(WAYLAND_SERVER_LIBS) $(XKBCOMMON_LIBS)

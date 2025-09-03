@@ -42,4 +42,6 @@ coverage:
 coverage-clean:
 	$(MAKE) -C tests coverage-clean
 
+clean-local: coverage-clean
+
 check-local: check-elisp
