@@ -442,28 +442,35 @@
       ;; Set focus to this frame
       (select-frame-set-input-focus frame))))
 
+(defun ewl-interactive-session-active-p ()
+  "Return t if user is in an interactive session that should not be interrupted."
+  (or (active-minibuffer-window)          ; Any minibuffer interaction
+      (> (recursion-depth) 0)))           ; Recursive edit session
+
 (defun ewl-restore-frame-workspace (frame)
   "Restore FRAME's exclusive workspace, preventing cross-frame contamination."
-  (let ((workspace (gethash frame ewl-frame-workspaces)))
-    (when workspace
-      (message "Focus: restoring exclusive workspace %s to frame %s" (buffer-name workspace) frame) ; DEBUG
-      (with-selected-frame frame
-        ;; Force the frame to show its exclusive workspace
-        (switch-to-buffer workspace)
-        ;; Set as current buffer in this frame context
-        (set-window-buffer (selected-window) workspace)))))
+  (unless (ewl-interactive-session-active-p)
+    (let ((workspace (gethash frame ewl-frame-workspaces)))
+      (when workspace
+        (message "Focus: restoring exclusive workspace %s to frame %s" (buffer-name workspace) frame) ; DEBUG
+        (with-selected-frame frame
+          ;; Force the frame to show its exclusive workspace
+          (switch-to-buffer workspace)
+          ;; Set as current buffer in this frame context
+          (set-window-buffer (selected-window) workspace))))))
 
 (defun ewl-maintain-workspace-isolation ()
   "Hook to maintain workspace isolation across all frames."
-  (dolist (frame (frame-list))
-    (let ((workspace (gethash frame ewl-frame-workspaces)))
-      (when (and workspace 
-                 (frame-live-p frame)
-                 (not (eq (selected-frame) frame))) ; Don't interfere with current frame
-        ;; Ensure non-current frames show their exclusive workspaces
-        (with-selected-frame frame
-          (when (not (eq (current-buffer) workspace))
-            (set-window-buffer (selected-window) workspace)))))))
+  (unless (ewl-interactive-session-active-p)
+    (dolist (frame (frame-list))
+      (let ((workspace (gethash frame ewl-frame-workspaces)))
+        (when (and workspace
+                   (frame-live-p frame)
+                   (not (eq (selected-frame) frame))) ; Don't interfere with current frame
+          ;; Ensure non-current frames show their exclusive workspaces
+          (with-selected-frame frame
+            (when (not (eq (current-buffer) workspace))
+              (set-window-buffer (selected-window) workspace))))))))
 
 (defun ewl-surface-init (objects)
   (setf (ewc-listener-global objects 'emacs-wayland-protocol 'ewp-surface 'destroy)
@@ -515,26 +522,24 @@ The function should return nil if it does not handle this surface.")
 (defun ewl-buffer-layout (&optional window)
   "Layout current wayland buffer on current window or WINDOW."
   (pcase-let* ((`(,left ,top ,right ,bottom) (window-absolute-pixel-edges window))
-               ;; Check if window is at frame top - if so, add offset for frame decorations
-               (frame-top (frame-parameter nil 'top))
+               (`(,body-left ,body-top ,body-right ,body-bottom) (window-absolute-body-pixel-edges window))
                (window-at-frame-top-p (= top 0))
-               ;; Get various frame measurements
-               (menu-bar-height (if (and menu-bar-mode (> (frame-parameter nil 'menu-bar-lines) 0))
-                                   (* (frame-parameter nil 'menu-bar-lines) (frame-char-height))
-                                 0))
-               (tool-bar-height (if (and tool-bar-mode (> (frame-parameter nil 'tool-bar-lines) 0))
-                                   (* (frame-parameter nil 'tool-bar-lines) (frame-char-height))
-                                 0))
-               ;; Title bar height - estimate from display system
-               (title-bar-height (if window-at-frame-top-p 30 0)) ; typical title bar
-               (total-top-offset (+ menu-bar-height tool-bar-height title-bar-height))
-               ;; Use the exact buffer window dimensions from window-inside-absolute-pixel-edges
+               ;; Get actual PGTK toolbar height from frame geometry
+               (pgtk-geometry (and window-at-frame-top-p (pgtk-frame-geometry)))
+               (actual-toolbar-height (if pgtk-geometry
+                                          (cdr (assq 'tool-bar-size pgtk-geometry))
+                                          0))
+               (toolbar-height (if (consp actual-toolbar-height)
+                                  (cdr actual-toolbar-height)
+                                  0))
+               ;; Position foot terminal precisely from toolbar bottom to modeline top
                (rel-left left)
-               (rel-top (+ top total-top-offset))
+               (rel-top (+ top toolbar-height))
                (width (- right left))
-               (height (- bottom top)))
-    (message "Update layout full-window:%s,%s,%s,%s top-offset:%s rel:%s,%s,%s,%s" 
-             left top right bottom total-top-offset rel-left rel-top width height)
+               ;; Height: from toolbar bottom to body content bottom (no black space)
+               (height (- body-bottom toolbar-height)))
+    (message "Update layout full-window:%s,%s,%s,%s toolbar-height:%s rel:%s,%s,%s,%s"
+             left top right bottom toolbar-height rel-left rel-top width height)
 
     (funcall (frame-parameter nil 'layout-surface)
              ewl-buffer-surface
@@ -746,11 +751,23 @@ looks up protocol in library."
   (setq frame-resize-pixelwise t
         window-resize-pixelwise t)
 
+  ;; Configure helm for better window placement if available
+  (when (featurep 'helm-core)
+    (setq split-width-threshold nil
+          helm-always-two-windows nil
+          helm-split-window-inside-p t))
+
+  ;; Set up helm configuration when helm loads
+  (with-eval-after-load 'helm-core
+    (setq split-width-threshold nil
+          helm-always-two-windows nil
+          helm-split-window-inside-p t))
+
   (add-hook 'window-size-change-functions #'ewl-update-frame)
-  
-  ;; Add workspace isolation maintenance 
-  (add-hook 'buffer-list-update-hook #'ewl-maintain-workspace-isolation)
-  (add-hook 'window-configuration-change-hook #'ewl-maintain-workspace-isolation)
+
+  ;; Workspace isolation disabled to allow buffer access on both displays
+  ;; (add-hook 'buffer-list-update-hook #'ewl-maintain-workspace-isolation)
+  ;; (add-hook 'window-configuration-change-hook #'ewl-maintain-workspace-isolation)
 
   (when server-p                        ; DEBUG
     (ewl-start-server)))
