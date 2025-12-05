@@ -54,12 +54,24 @@
 #include "ews_surface.h"
 #include "ews_types.h"
 
+// Custom log filter to suppress noisy DMA-BUF scan-out failures while keeping other debug info
+static void ews_log_filter(enum wlr_log_importance importance, const char *fmt, va_list args) {
+  // Suppress specific DMA-BUF scan-out failure messages that spam the log
+  if (strstr(fmt, "Failed to get DMA-BUF from buffer") ||
+      strstr(fmt, "Failed to import buffer for scan-out")) {
+    return;
+  }
+
+  // Pass all other messages through to default logger
+  _wlr_vlog(importance, fmt, args);
+}
+
 #ifdef EWS_TESTING
 int ews_main(int argc, char *argv[]) {
 #else
 int main(int argc, char *argv[]) {
 #endif
-  wlr_log_init(WLR_DEBUG, NULL);
+  wlr_log_init(WLR_INFO, 0);
   char *startup_cmd = NULL;
 
   int c;
@@ -159,6 +171,13 @@ int main(int argc, char *argv[]) {
 
   wl_global_create(server.wl_display, &ewp_layout_interface, 1, &layout,
                    ewp_layout_handle_bind);
+
+  // Initialize screen capture protocol
+  if (!ews_screencopy_manager_init(&server.screencopy_manager, server.wl_display, server.renderer)) {
+    wlr_log(WLR_ERROR, "Failed to create screencopy manager");
+    wlr_backend_destroy(server.backend);
+    return 1;
+  }
 
   const char *socket = wl_display_add_socket_auto(server.wl_display);
   if (!socket) {

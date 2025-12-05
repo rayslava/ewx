@@ -22,6 +22,7 @@ ews_SOURCES = \
     ews_output.c \
     ews_surface.c \
     ews_ewp.c \
+    ews_screencopy.c \
     ewp-protocol.c
 
 nodist_ews_SOURCES = \

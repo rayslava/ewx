@@ -44,6 +44,8 @@
 #include <wlr/types/wlr_xdg_output_v1.h>
 #include <wlr/types/wlr_xdg_shell.h>
 
+#include "ews_screencopy.h"
+
 /* Forward declarations */
 struct ews_server;
 struct ews_output;
@@ -77,6 +79,8 @@ struct ews_server {
 
   struct wlr_output_layout *output_layout;
   struct wl_list outputs;
+
+  struct ews_screencopy_manager screencopy_manager;
   struct wl_listener new_output;
 
   struct wl_resource *layout_resource;
