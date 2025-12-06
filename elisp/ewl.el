@@ -234,11 +234,11 @@
       (let ((workspace (generate-new-buffer (format "*Output-%d-Desktop*" output-id))))
         (with-current-buffer workspace
           (insert (format "=== Output %d Independent Desktop ===\n\n" output-id))
-          (insert (format "This is an INDEPENDENT desktop for Output %d.\n" output-id))  
+          (insert (format "This is an INDEPENDENT desktop for Output %d.\n" output-id))
           (insert (format "Output %d has its own isolated workspace.\n\n" output-id))
           (insert "Features:\n")
           (insert "- Independent buffer management\n")
-          (insert "- Frame-local workspace isolation\n") 
+          (insert "- Frame-local workspace isolation\n")
           (insert "- Separate from other monitors\n\n")
           (insert (format "Current time: %s\n" (current-time-string)))
           (insert (format "Frame: This workspace is bound to Output %d frame\n\n" output-id))
@@ -358,28 +358,24 @@
       (when width (setf (frame-parameter frame 'ewl-output-width) width))
       (when height (setf (frame-parameter frame 'ewl-output-height) height))
       (when name (setf (frame-parameter frame 'ewl-output-name) name))
-      
+
       ;; Update frame size to match output dimensions
       (when (and width height)
-        (message "Updating frame size to %dx%d for output %d (frame: %s)" width height (ewl-output-id output) frame) ; DEBUG
         (let ((target-cols (/ width (frame-char-width frame)))
               (target-rows (/ height (frame-char-height frame))))
-          (message "Target size: %dx%d chars, current: %dx%d" target-cols target-rows (frame-width frame) (frame-height frame)) ; DEBUG
           ;; Only resize if significantly different to avoid constant adjustments
           (unless (and (< (abs (- (frame-width frame) target-cols)) 5)
                        (< (abs (- (frame-height frame) target-rows)) 5))
-            (message "Resizing frame %s to %dx%d chars" frame target-cols target-rows) ; DEBUG
             (set-frame-size frame target-cols target-rows))
-          
+
           ;; Initialize workspace for this output when geometry is available
           (let ((workspace (ewl-output-get-workspace (ewl-output-id output))))
-            (message "Setting workspace %s for output %d on frame %s" (buffer-name workspace) (ewl-output-id output) frame) ; DEBUG
             ;; Bind workspace exclusively to this frame
             (ewl-bind-workspace-to-frame frame workspace)
             ;; Initialize frame with its workspace
             (with-selected-frame frame
               (switch-to-buffer workspace)))))
-      
+
       ;; Update layout-surface function
       (when (or x y height)
         (setf (frame-parameter frame 'layout-surface)
@@ -430,17 +426,21 @@
 (defun ewl-surface-focus (surface _args)
   (when-let ((buffer (ewc-object-data surface)))
     (select-window (car (alist-get buffer ewl-buffers))))
-  
-  ;; Find the frame associated with this surface and ensure workspace isolation
+
+  ;; Check if this surface is a frame surface (Emacs frame) or a wayland buffer surface
   (let ((frame (cl-loop for frame in (frame-list)
                         when (eq surface (frame-parameter frame 'ewl-surface))
                         return frame)))
-    (when frame
-      (message "Focus: selecting frame %s (output %s)" frame (frame-parameter frame 'ewl-output-id)) ; DEBUG
-      ;; Restore frame's exclusive workspace before focusing
-      (ewl-restore-frame-workspace frame)
-      ;; Set focus to this frame
-      (select-frame-set-input-focus frame))))
+    (if frame
+        ;; This is an Emacs frame surface being focused
+        (progn
+          ;; Restore frame's exclusive workspace for frame focus events
+          (ewl-restore-frame-workspace frame)
+          ;; Set focus to this frame
+          (select-frame-set-input-focus frame))
+      ;; This is a wayland buffer surface being focused
+      ;; Don't restore workspace for individual wayland buffer focus
+      )))
 
 (defun ewl-interactive-session-active-p ()
   "Return t if user is in an interactive session that should not be interrupted."
@@ -452,12 +452,10 @@
   (unless (ewl-interactive-session-active-p)
     (let ((workspace (gethash frame ewl-frame-workspaces)))
       (when workspace
-        (message "Focus: restoring exclusive workspace %s to frame %s" (buffer-name workspace) frame) ; DEBUG
-        (with-selected-frame frame
-          ;; Force the frame to show its exclusive workspace
-          (switch-to-buffer workspace)
-          ;; Set as current buffer in this frame context
-          (set-window-buffer (selected-window) workspace))))))
+        ;; Don't automatically switch to workspace on focus events
+        ;; This prevents overriding user buffer choice when clicking between displays
+        ;; The workspace is still bound to the frame but not forced on every focus
+        nil))))
 
 (defun ewl-maintain-workspace-isolation ()
   "Hook to maintain workspace isolation across all frames."
