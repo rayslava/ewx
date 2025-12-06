@@ -532,12 +532,12 @@ The function should return nil if it does not handle this surface.")
                (toolbar-height (if (consp actual-toolbar-height)
                                   (cdr actual-toolbar-height)
                                   0))
-               ;; Position foot terminal precisely from toolbar bottom to modeline top
+               ;; Position foot terminal precisely from toolbar bottom to frame bottom
                (rel-left left)
                (rel-top (+ top toolbar-height))
                (width (- right left))
-               ;; Height: from toolbar bottom to body content bottom (no black space)
-               (height (- body-bottom toolbar-height)))
+               ;; Height: from toolbar bottom to exactly frame bottom (perfect fit)
+               (height (- (frame-pixel-height) (+ top toolbar-height))))
     (message "Update layout full-window:%s,%s,%s,%s toolbar-height:%s rel:%s,%s,%s,%s"
              left top right bottom toolbar-height rel-left rel-top width height)
 
