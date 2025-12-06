@@ -499,6 +499,17 @@ The function should return nil if it does not handle this surface.")
                                                       )
                                       app-id pid)))
 
+;;; Helper function to get mode-line border height
+(defun ewl-mode-line-border-height ()
+  "Return the total vertical border height of the mode-line face."
+  (let ((box (face-attribute 'mode-line :box)))
+    (if (and box (plist-get box :line-width))
+        (let ((line-width (plist-get box :line-width)))
+          (if (consp line-width)
+              (* 2 (cdr line-width))  ; horizontal line width, doubled for top+bottom
+            (* 2 line-width)))
+      0)))
+
 ;;; General layout function
 (defun ewl-layout (surface output-id x y width height)
   "Layout a ewp-SURFACE on OUTPUT-ID at X Y with WIDTH and HEIGHT."
@@ -534,8 +545,9 @@ The function should return nil if it does not handle this surface.")
                (rel-left left)
                (rel-top (+ top toolbar-height))
                (width (- right left))
-               ;; Height: from toolbar bottom to exactly frame bottom (perfect fit)
-               (height (- (frame-pixel-height) (+ top toolbar-height))))
+               ;; Height: from toolbar bottom to modeline content (excluding border)
+               (height (+ (- bottom (+ top toolbar-height))
+                         (- (window-mode-line-height) (ewl-mode-line-border-height)))))
     (message "Update layout full-window:%s,%s,%s,%s toolbar-height:%s rel:%s,%s,%s,%s"
              left top right bottom toolbar-height rel-left rel-top width height)
 
