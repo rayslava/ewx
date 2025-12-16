@@ -413,9 +413,24 @@
   (let ((buffer (ewc-object-data surface)))
     (when (and buffer
                (buffer-live-p buffer))
-      (with-current-buffer buffer
-        (setq ewl-buffer-surface nil)
-        (kill-buffer)))))
+      ;; Remember which window was showing this buffer for focus restoration
+      (let ((showing-window (get-buffer-window buffer)))
+        (with-current-buffer buffer
+          (setq ewl-buffer-surface nil)
+          (kill-buffer))
+        ;; After buffer is killed, focus the replacement buffer if window still exists
+        (when (and showing-window (window-live-p showing-window))
+          (with-current-buffer (window-buffer showing-window)
+            ;; Check if the replacement buffer has a wayland surface to focus
+            (when ewl-buffer-surface
+              (select-window showing-window)
+              (ewc-request ewl-buffer-surface 'focus))
+            ;; If no wayland surface, focus the frame surface instead
+            (unless ewl-buffer-surface
+              (let ((frame-surface (frame-parameter (window-frame showing-window) 'ewl-surface)))
+                (when frame-surface
+                  (select-window showing-window)
+                  (ewc-request frame-surface 'focus))))))))))
 
 (defun ewl-surface-update-title (surface args)
   (when-let ((title (alist-get 'title args))
@@ -490,14 +505,15 @@ The function should return nil if it does not handle this surface.")
     ;; handle update-title and destroy events -> do it once in init
 
     ;; add buffer and link to surface
-    (run-hook-with-args-until-success 'ewl-surface-functions
-                                      (ewc-object-add :objects (ewc-object-objects object)
-                                                      :protocol 'emacs-wayland-protocol
-                                                      :interface 'ewp-surface
-                                                      :id id
-                                                      ;; :data ?
-                                                      )
-                                      app-id pid)))
+    (let ((surface (ewc-object-add :objects (ewc-object-objects object)
+                                   :protocol 'emacs-wayland-protocol
+                                   :interface 'ewp-surface
+                                   :id id
+                                   ;; :data ?
+                                   )))
+      (when (run-hook-with-args-until-success 'ewl-surface-functions surface app-id pid)
+        ;; Automatically focus new surface if buffer creation succeeded
+        (ewc-request surface 'focus)))))
 
 ;;; Helper function to get mode-line border height
 (defun ewl-mode-line-border-height ()
@@ -628,12 +644,11 @@ Add to `kill-buffer-query-functions'."
 (defun ewl-buffer-focus (window)
   "Handle focus for a WINDOW showing a `ewl-buffer-surface'.
 Add buffer-local to `window-selection-change-functions'."
-  (if (eq window (selected-window))
-      ;; Focus
-      (with-current-buffer (window-buffer window)
-        (ewc-request ewl-buffer-surface 'focus))
-    ;; Defocus
-    (ewc-request (frame-parameter (window-frame window) 'ewl-surface) 'focus)))
+  ;; Only focus when this window is being selected (becomes the selected window)
+  (when (eq window (selected-window))
+    (with-current-buffer (window-buffer window)
+      (when ewl-buffer-surface
+        (ewc-request ewl-buffer-surface 'focus)))))
 
 (define-derived-mode ewl-buffer-mode nil "X"
   "Major mode for managing wayland buffers.
@@ -657,8 +672,7 @@ Add buffer-local to `window-selection-change-functions'."
         vertical-scroll-bar nil)
 
   (add-hook 'window-size-change-functions #'ewl-update-window nil t)
-  ;; (add-hook 'window-selection-change-functions #'ewl-buffer-focus nil t) TODO: Waiting for input handling
-  )
+  (add-hook 'window-selection-change-functions #'ewl-buffer-focus nil t))
 
 (defun ewl-buffer-init (surface _app-id _pid)
   (with-current-buffer (generate-new-buffer "*X X*")
