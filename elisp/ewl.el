@@ -1,6 +1,7 @@
 ;;; ewl.el --- Emacs wayland layout   -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2023  Michael Bauer
+;;           (C) 2025  Slava Barinov
 
 ;; Author: Michael Bauer <michael-bauer@posteo.de>
 ;; Keywords: unix
@@ -102,6 +103,7 @@
 ;;; Code:
 (require 'ewc)
 (require 'xdg)
+(require 'ewl-workspace)
 
 ;;; Helper
 (defun add-onetime-hook (hook function)
@@ -200,9 +202,6 @@
 
 (defvar ewl-next-output-id 0 "Next output ID to assign.")
 (defvar ewl-unassigned-outputs nil "List of outputs waiting for surface assignment.")
-(defvar ewl-output-workspaces (make-hash-table) "Hash table mapping output-id to current workspace buffer.")
-(defvar ewl-frame-workspaces (make-hash-table :weakness 'key) "Hash table mapping frame to its workspace buffer.")
-(defvar ewl-workspace-frames (make-hash-table :weakness 'value) "Hash table mapping workspace buffer to its frame.")
 
 (defun ewl-assign-surface-to-output (surface _app-id pid)
   "Assign a surface to the first available unassigned output."
@@ -217,37 +216,6 @@
       (ewl-output-layout-frame output)
       t)))
 
-(defun ewl-output-set-workspace (output-id buffer)
-  "Set the workspace buffer for OUTPUT-ID."
-  (puthash output-id buffer ewl-output-workspaces)
-  (message "Set workspace for output %d to buffer %s" output-id (buffer-name buffer)))
-
-(defun ewl-bind-workspace-to-frame (frame workspace)
-  "Exclusively bind WORKSPACE buffer to FRAME."
-  (puthash frame workspace ewl-frame-workspaces)
-  (puthash workspace frame ewl-workspace-frames)
-  (message "Bound workspace %s exclusively to frame %s" (buffer-name workspace) frame))
-
-(defun ewl-output-get-workspace (output-id)
-  "Get the current workspace buffer for OUTPUT-ID, creating one if needed."
-  (or (gethash output-id ewl-output-workspaces)
-      (let ((workspace (generate-new-buffer (format "*Output-%d-Desktop*" output-id))))
-        (with-current-buffer workspace
-          (insert (format "=== Output %d Independent Desktop ===\n\n" output-id))
-          (insert (format "This is an INDEPENDENT desktop for Output %d.\n" output-id))
-          (insert (format "Output %d has its own isolated workspace.\n\n" output-id))
-          (insert "Features:\n")
-          (insert "- Independent buffer management\n")
-          (insert "- Frame-local workspace isolation\n")
-          (insert "- Separate from other monitors\n\n")
-          (insert (format "Current time: %s\n" (current-time-string)))
-          (insert (format "Frame: This workspace is bound to Output %d frame\n\n" output-id))
-          (insert "Try opening different files or buffers on each monitor!\n")
-          ;; Make buffer locally frame-bound
-          (setq-local ewl-bound-output-id output-id)
-          (setq-local ewl-frame-local-workspace t))
-        (puthash output-id workspace ewl-output-workspaces)
-        workspace)))
 
 (defun ewl-output-new (registry outputs name version)
   (cl-assert (eql version 4))
@@ -369,9 +337,9 @@
             (set-frame-size frame target-cols target-rows))
 
           ;; Initialize workspace for this output when geometry is available
-          (let ((workspace (ewl-output-get-workspace (ewl-output-id output))))
+          (let ((workspace (ewl-workspace-output-get-workspace (ewl-output-id output))))
             ;; Bind workspace exclusively to this frame
-            (ewl-bind-workspace-to-frame frame workspace)
+            (ewl-workspace-bind-workspace-to-frame frame workspace)
             ;; Initialize frame with its workspace
             (with-selected-frame frame
               (switch-to-buffer workspace)))))
@@ -450,40 +418,13 @@
         ;; This is an Emacs frame surface being focused
         (progn
           ;; Restore frame's exclusive workspace for frame focus events
-          (ewl-restore-frame-workspace frame)
+          (ewl-workspace-restore-frame-workspace frame)
           ;; Set focus to this frame
           (select-frame-set-input-focus frame))
       ;; This is a wayland buffer surface being focused
       ;; Don't restore workspace for individual wayland buffer focus
       )))
 
-(defun ewl-interactive-session-active-p ()
-  "Return t if user is in an interactive session that should not be interrupted."
-  (or (active-minibuffer-window)          ; Any minibuffer interaction
-      (> (recursion-depth) 0)))           ; Recursive edit session
-
-(defun ewl-restore-frame-workspace (frame)
-  "Restore FRAME's exclusive workspace, preventing cross-frame contamination."
-  (unless (ewl-interactive-session-active-p)
-    (let ((workspace (gethash frame ewl-frame-workspaces)))
-      (when workspace
-        ;; Don't automatically switch to workspace on focus events
-        ;; This prevents overriding user buffer choice when clicking between displays
-        ;; The workspace is still bound to the frame but not forced on every focus
-        nil))))
-
-(defun ewl-maintain-workspace-isolation ()
-  "Hook to maintain workspace isolation across all frames."
-  (unless (ewl-interactive-session-active-p)
-    (dolist (frame (frame-list))
-      (let ((workspace (gethash frame ewl-frame-workspaces)))
-        (when (and workspace
-                   (frame-live-p frame)
-                   (not (eq (selected-frame) frame))) ; Don't interfere with current frame
-          ;; Ensure non-current frames show their exclusive workspaces
-          (with-selected-frame frame
-            (when (not (eq (current-buffer) workspace))
-              (set-window-buffer (selected-window) workspace))))))))
 
 (defun ewl-surface-init (objects)
   (setf (ewc-listener-global objects 'emacs-wayland-protocol 'ewp-surface 'destroy)
@@ -553,17 +494,17 @@ The function should return nil if it does not handle this surface.")
                (pgtk-geometry (and window-at-frame-top-p (pgtk-frame-geometry)))
                (actual-toolbar-height (if pgtk-geometry
                                           (cdr (assq 'tool-bar-size pgtk-geometry))
-                                          0))
+                                        0))
                (toolbar-height (if (consp actual-toolbar-height)
-                                  (cdr actual-toolbar-height)
-                                  0))
+                                   (cdr actual-toolbar-height)
+                                 0))
                ;; Position foot terminal precisely from toolbar bottom to frame bottom
                (rel-left left)
                (rel-top (+ top toolbar-height))
                (width (- right left))
                ;; Height: from toolbar bottom to modeline content (excluding border)
                (height (+ (- bottom (+ top toolbar-height))
-                         (- (window-mode-line-height) (ewl-mode-line-border-height)))))
+                          (- (window-mode-line-height) (ewl-mode-line-border-height)))))
     (message "Update layout full-window:%s,%s,%s,%s toolbar-height:%s rel:%s,%s,%s,%s"
              left top right bottom toolbar-height rel-left rel-top width height)
 
@@ -790,8 +731,8 @@ looks up protocol in library."
   (add-hook 'window-size-change-functions #'ewl-update-frame)
 
   ;; Workspace isolation disabled to allow buffer access on both displays
-  ;; (add-hook 'buffer-list-update-hook #'ewl-maintain-workspace-isolation)
-  ;; (add-hook 'window-configuration-change-hook #'ewl-maintain-workspace-isolation)
+  ;; (add-hook 'buffer-list-update-hook #'ewl-workspace-maintain-workspace-isolation)
+  ;; (add-hook 'window-configuration-change-hook #'ewl-workspace-maintain-workspace-isolation)
 
   (when server-p                        ; DEBUG
     (ewl-start-server)))

@@ -1,5 +1,6 @@
 ELISP_FILES = \
     ewc.el \
+    ewl-workspace.el \
     ewl.el
 
 EXTRA_DIST = \
