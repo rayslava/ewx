@@ -165,27 +165,61 @@
   "Switch to WORKSPACE-INDEX on OUTPUT-ID."
   (interactive)
   (let* ((workspace-frames (gethash output-id ewl-workspace-list))
-         (current-index (ewl-workspace-get-current-index output-id)))
+         (current-index (ewl-workspace-get-current-index output-id))
+         (target-frame (ewl-workspace-get-output-frame output-id))
+         (current-output-id (ewl-workspace-get-current-output-id))
+         (same-workspace-p (= workspace-index current-index))
+         (different-output-p (not (= output-id current-output-id))))
+
     (when (and workspace-frames
                (>= workspace-index 0)
-               (< workspace-index (length workspace-frames))
-               (not (= workspace-index current-index)))
+               (< workspace-index (length workspace-frames)))
 
-      (message "Switching output %d from workspace %d to %d"
-               output-id current-index workspace-index)
+      (cond
+       ;; Case 1: Same workspace on different output - just switch focus
+       ((and same-workspace-p different-output-p)
+        (when (and target-frame (not (eq target-frame (selected-frame))))
+          (let ((frame-surface (frame-parameter target-frame 'ewl-surface)))
+            (when frame-surface
+              (ewc-request frame-surface 'focus)
+              (select-frame-set-input-focus target-frame)
+              (message "Switched focus to output %d (workspace %d already active)" output-id workspace-index))
+            (unless frame-surface
+              (select-frame-set-input-focus target-frame)
+              (message "Switched focus to output %d (no wayland surface)" output-id)))))
 
-      ;; Hide surfaces from current workspace
-      (ewl-workspace-hide-surfaces output-id current-index)
+       ;; Case 2: Different workspace - do full workspace switch
+       ((not same-workspace-p)
+        (message "Switching output %d from workspace %d to %d"
+                 output-id current-index workspace-index)
 
-      ;; Update current workspace
-      (puthash output-id workspace-index ewl-workspace-current-index)
-      (puthash output-id (nth workspace-index workspace-frames) ewl-workspace-current)
+        ;; Hide surfaces from current workspace
+        (ewl-workspace-hide-surfaces output-id current-index)
 
-      ;; Show surfaces for new workspace
-      (ewl-workspace-show-surfaces output-id workspace-index)
+        ;; Update current workspace
+        (puthash output-id workspace-index ewl-workspace-current-index)
+        (puthash output-id (nth workspace-index workspace-frames) ewl-workspace-current)
 
-      ;; Run hook
-      (run-hooks 'ewl-workspace-switch-hook))))
+        ;; Show surfaces for new workspace
+        (ewl-workspace-show-surfaces output-id workspace-index)
+
+        ;; Switch focus to the target output if different from current
+        (when (and target-frame different-output-p (not (eq target-frame (selected-frame))))
+          (let ((frame-surface (frame-parameter target-frame 'ewl-surface)))
+            (when frame-surface
+              (ewc-request frame-surface 'focus)
+              (select-frame-set-input-focus target-frame)
+              (message "Switched focus to output %d via wayland surface" output-id))
+            (unless frame-surface
+              (select-frame-set-input-focus target-frame)
+              (message "Switched focus to output %d (no wayland surface)" output-id))))
+
+        ;; Run hook
+        (run-hooks 'ewl-workspace-switch-hook))
+
+       ;; Case 3: Same workspace on same output - do nothing
+       (t
+        (message "Already on workspace %d on output %d" workspace-index output-id))))))
 
 (defvar ewl-workspace-window-configurations (make-hash-table :test 'equal)
   "Hash table mapping (output-id . workspace-index) to window configurations.")
@@ -290,7 +324,9 @@
 
 (defun ewl-workspace-get-current-output-id ()
   "Get the output-id for the currently selected frame."
-  (or (frame-parameter (selected-frame) 'ewl-output-id) 0))
+  (or (frame-parameter (selected-frame) 'ewl-output-id)
+      (ewl-workspace-get-frame-output-id (selected-frame))
+      0))
 
 ;;; User Commands
 
@@ -318,50 +354,70 @@
 
 (defcustom ewl-workspace-keybindings
   '((output-0 . ((1 . 0) (2 . 1) (3 . 2) (4 . 3)))
-    (output-1 . ((5 . 0) (6 . 1) (7 . 2) (8 . 3))))
+    (output-1 . (("-" . 0) ("=" . 1) ("\\" . 2) ("`" . 3))))
   "Keybinding configuration for workspace switching.
 An alist where each element is (OUTPUT-SYMBOL . BINDINGS).
-BINDINGS is an alist of (KEY-NUMBER . WORKSPACE-INDEX) pairs.
+BINDINGS is an alist of (KEY-STRING . WORKSPACE-INDEX) pairs.
+KEY-STRING can be a number (converted to string) or a symbolic key.
 
 For example:
 - s-1 through s-4 switch to workspaces 0-3 on output 0
-- s-5 through s-8 switch to workspaces 0-3 on output 1"
+- s-- s-= s-\\ s-` switch to workspaces 0-3 on output 1"
   :type '(alist :key-type symbol
-                :value-type (alist :key-type integer :value-type integer))
+                :value-type (alist :key-type (choice string integer) :value-type integer))
   :group 'ewl-workspace)
 
 (defun ewl-workspace-setup-keybindings ()
   "Set up workspace switching keybindings based on configuration."
   (interactive)
-  ;; Clear any existing workspace keybindings first
-  (dolist (key-num (number-sequence 1 9))
-    (global-unset-key (kbd (format "s-%d" key-num))))
+  ;; Collect all keys from current configuration for cleanup
+  (let ((all-keys '()))
+    (dolist (output-config ewl-workspace-keybindings)
+      (dolist (binding (cdr output-config))
+        (let* ((key-spec (car binding))
+               (key-string (if (numberp key-spec)
+                               (number-to-string key-spec)
+                             key-spec)))
+          (push key-string all-keys))))
 
-  ;; Set up new keybindings
-  (dolist (output-config ewl-workspace-keybindings)
-    (let ((output-symbol (car output-config))
-          (bindings (cdr output-config)))
-      (dolist (binding bindings)
-        (let* ((key-num (car binding))
-               (workspace-index (cdr binding))
-               (output-id (pcase output-symbol
-                            ('output-0 0)
-                            ('output-1 1)
-                            (_ (string-to-number (substring (symbol-name output-symbol) -1)))))
-               (key-binding (kbd (format "s-%d" key-num))))
-          (global-set-key key-binding
-                          `(lambda ()
-                             (interactive)
-                             (ewl-workspace-switch-on-output ,output-id ,workspace-index)
-                             (message "Switched to workspace %d on output %d"
-                                      ,workspace-index ,output-id)))))))
-  (message "EWL workspace keybindings configured: %s"
-           (mapconcat (lambda (config)
-			(format "%s: s-%s"
-				(car config)
-				(mapconcat (lambda (binding) (number-to-string (car binding)))
-                                           (cdr config) ",")))
-                      ewl-workspace-keybindings " | ")))
+    ;; Clear existing keybindings from configuration
+    (dolist (key-string all-keys)
+      (global-unset-key (kbd (format "s-%s" key-string))))
+
+    ;; Set up new keybindings
+    (dolist (output-config ewl-workspace-keybindings)
+      (let ((output-symbol (car output-config))
+            (bindings (cdr output-config)))
+        (dolist (binding bindings)
+          (let* ((key-spec (car binding))
+                 (workspace-index (cdr binding))
+                 (output-id (pcase output-symbol
+                              ('output-0 0)
+                              ('output-1 1)
+                              (_ (string-to-number (substring (symbol-name output-symbol) -1)))))
+                 (key-string (if (numberp key-spec)
+                                 (number-to-string key-spec)
+                               key-spec))
+                 (key-binding (kbd (format "s-%s" key-string))))
+            (global-set-key key-binding
+                            `(lambda ()
+                               (interactive)
+                               (ewl-workspace-switch-on-output ,output-id ,workspace-index)
+                               (message "Switched to workspace %d on output %d"
+                                        ,workspace-index ,output-id)))))))
+
+    ;; Display configured keybindings
+    (message "EWL workspace keybindings configured: %s"
+             (mapconcat (lambda (config)
+                          (format "%s: s-%s"
+                                  (car config)
+                                  (mapconcat (lambda (binding)
+                                               (let ((key-spec (car binding)))
+                                                 (if (numberp key-spec)
+                                                     (number-to-string key-spec)
+                                                   key-spec)))
+                                             (cdr config) ",")))
+                        ewl-workspace-keybindings " | "))))
 
 (defun ewl-workspace-add-output-keybindings (output-id start-key)
   "Add keybindings for OUTPUT-ID starting from START-KEY.
